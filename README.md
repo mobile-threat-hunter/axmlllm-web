@@ -28,3 +28,13 @@ python3 -m http.server 8000   # then open http://localhost:8000
 ## Build
 
 See [`wasm-build/README.md`](wasm-build/README.md).
+
+## Test
+
+```sh
+node wasm-build/smoke.mjs                              # wheel + worker Python, in node
+node e2e/run.mjs <page-url> <apk> [apk ...]            # page in headless Chrome (node >= 22)
+```
+
+`e2e/run.mjs` drives the page over the Chrome DevTools Protocol, so the same command
+checks a local `python3 -m http.server` and the deployed GitHub Pages site.
