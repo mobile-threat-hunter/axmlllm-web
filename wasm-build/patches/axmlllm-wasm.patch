@@ -1,0 +1,290 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index 6e715c3..755194c 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -20,7 +20,12 @@ set(EXT "${AOSP_ROOT}/external")
+ 
+ # ── Include roots (mirrors libandroidfw host build) ─────────────────────────
+ set(AOSP_INCLUDES
+-  ${CMAKE_SOURCE_DIR}/native/aosp_shim/include
++  ${CMAKE_SOURCE_DIR}/native/aosp_shim/include)
++if(EMSCRIPTEN)
++  # Headers musl lacks (sys/cdefs.h & co) — searched before the sysroot.
++  list(APPEND AOSP_INCLUDES ${CMAKE_SOURCE_DIR}/native/aosp_shim/include-wasm)
++endif()
++list(APPEND AOSP_INCLUDES
+   ${FW}/base/libs/androidfw/include
+   ${FW}/base/libs/androidfw/include_pathutils
+   ${SYS}/core/libutils/include
+@@ -133,6 +138,31 @@ file(WRITE ${CMAKE_BINARY_DIR}/aosp_patched/LoadedArsc.cpp "${_loaded_arsc}")
+ list(REMOVE_ITEM ANDROIDFW_SRCS ${_LOADED_ARSC})
+ list(APPEND ANDROIDFW_SRCS ${CMAKE_BINARY_DIR}/aosp_patched/LoadedArsc.cpp)
+ 
++# ── wasm-only configure-time patches (same pattern/safeguards as LoadedArsc above) ──
++# Emscripten's libc++ is ABI v2: string_view iterators are __bounded_iter, which does
++# not convert to const char* — AOSP's own libc++ (ABI v1 iterators) accepts these
++# lines. Each replacement is semantics-preserving on BOTH toolchains.
++if(EMSCRIPTEN)
++  function(axml_wasm_patch src old new)
++    file(READ ${src} _text)
++    string(FIND "${_text}" "${old}" _first)
++    string(FIND "${_text}" "${old}" _last REVERSE)
++    if(_first EQUAL -1 OR NOT _first EQUAL _last)
++      message(FATAL_ERROR "wasm patch: expected exactly one occurrence in ${src}: ${old}")
++    endif()
++    string(REPLACE "${old}" "${new}" _text "${_text}")
++    get_filename_component(_name ${src} NAME)
++    file(WRITE ${CMAKE_BINARY_DIR}/aosp_patched/${_name} "${_text}")
++    set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${src})
++  endfunction()
++
++  axml_wasm_patch(${AFW}/Util.cpp
++    "parts.emplace_back(StringPiece(start, current - start));"
++    "parts.emplace_back(StringPiece(start, current));  // axmlllm wasm: iterator-pair ctor (bounded_iter)")
++  list(REMOVE_ITEM ANDROIDFW_SRCS ${AFW}/Util.cpp)
++  list(APPEND ANDROIDFW_SRCS ${CMAKE_BINARY_DIR}/aosp_patched/Util.cpp)
++endif()
++
+ add_library(androidfw_static STATIC
+   ${ANDROIDFW_SRCS} ${LIBUTILS_BINDER_SRCS} ${LIBUTILS_SRCS}
+   ${LIBBASE_SRCS} ${LIBZIPARCHIVE_SRCS} ${LIBLOG_SRCS} ${LIBCUTILS_SRCS}
+@@ -143,26 +173,49 @@ target_compile_definitions(androidfw_static PUBLIC STATIC_ANDROIDFW_FOR_TOOLS ZL
+ # liblog event-tag ids (system/logging/liblog Android.bp cflags).
+ target_compile_definitions(androidfw_static PRIVATE
+   LIBLOG_LOG_TAG=1006 SNET_EVENT_LOG_TAG=1397638484 ANDROID_DEBUGGABLE=0)
+-# AOSP code targets clang + libc++. Use the bundled libc++ for ABI/feature parity
+-# (e.g. incfs map_ptr iterators rely on libc++ algorithm internals). Silence the
+-# AOSP warning set — we are not the upstream maintainers.
+-target_compile_options(androidfw_static PUBLIC -stdlib=libc++ -w)
+-# Statically link libc++ so the wheel/.so has no runtime dependency on the AOSP clang
+-# lib dir (otherwise consumers need LD_LIBRARY_PATH=<clang>/lib).
+-target_link_options(androidfw_static PUBLIC -stdlib=libc++ -static-libstdc++)
+-find_package(ZLIB REQUIRED)
+-target_link_libraries(androidfw_static PUBLIC ZLIB::ZLIB)
++if(EMSCRIPTEN)
++  # Emscripten's clang is already libc++; -static-libstdc++ is a native-linker flag.
++  # Exceptions: the binding throws/catches (TableLoadError, bad_alloc from the
++  # removed reserves). Use NATIVE wasm EH (-fwasm-exceptions) — pywasmcross/Pyodide
++  # inject the same; mixing in -fexceptions (emscripten's JS-based EH) is
++  # ABI-incompatible and turns every throw into an `unreachable` trap.
++  target_compile_options(androidfw_static PUBLIC -w -fwasm-exceptions)
++  target_link_options(androidfw_static PUBLIC -fwasm-exceptions)
++  # zlib via the emscripten port (fidelity caveat: not AOSP's external/zlib copy).
++  target_compile_options(androidfw_static PUBLIC "SHELL:-s USE_ZLIB=1")
++  target_link_options(androidfw_static PUBLIC "SHELL:-s USE_ZLIB=1")
++else()
++  # AOSP code targets clang + libc++. Use the bundled libc++ for ABI/feature parity
++  # (e.g. incfs map_ptr iterators rely on libc++ algorithm internals). Silence the
++  # AOSP warning set — we are not the upstream maintainers.
++  target_compile_options(androidfw_static PUBLIC -stdlib=libc++ -w)
++  # Statically link libc++ so the wheel/.so has no runtime dependency on the AOSP clang
++  # lib dir (otherwise consumers need LD_LIBRARY_PATH=<clang>/lib).
++  target_link_options(androidfw_static PUBLIC -stdlib=libc++ -static-libstdc++)
++  find_package(ZLIB REQUIRED)
++  target_link_libraries(androidfw_static PUBLIC ZLIB::ZLIB)
++endif()
+ 
+ # ── Standalone smoke test (fast iteration before the pybind11 module) ────────
+ option(AXML_BUILD_SMOKE "Build the standalone C++ smoke test" ON)
+ if(AXML_BUILD_SMOKE)
+   add_executable(axml_smoke native/smoke/axml_smoke.cpp)
+   target_link_libraries(axml_smoke PRIVATE androidfw_static)
++  if(EMSCRIPTEN)
++    # Run under node against real files: axml_smoke.js <path>
++    target_link_options(axml_smoke PRIVATE
++      "SHELL:-s NODERAWFS=1" "SHELL:-s ALLOW_MEMORY_GROWTH=1" "SHELL:-s STACK_SIZE=16MB")
++  endif()
+ endif()
+ 
+ # ── pybind11 module (_axml_core) ─────────────────────────────────────────────
+ # Built under scikit-build (wheel) and also standalone when pybind11 is importable
+ # (fast dev iteration: `cmake -S . -B build/dev && cmake --build build/dev`).
++# Use pybind11's modern FindPython path: the legacy FindPythonLibsNew finds the
++# HOST interpreter and fails cross-compiles ("Python is 64-bit, compiler is
++# 32-bit" under pyodide-build); scikit-build-core injects the cross hints for
++# FindPython.
++set(PYBIND11_FINDPYTHON ON)
+ find_package(pybind11 CONFIG QUIET)
+ if(pybind11_FOUND)
+   pybind11_add_module(_axml_core native/androidfw_binding/module.cpp)
+@@ -170,8 +223,15 @@ if(pybind11_FOUND)
+   # The host-refusal witness (module.cpp, HOST REFUSALS): every call through which AOSP's loader
+   # takes memory or a descriptor goes through a wrapper. tests/test_harnesses.py checks this list
+   # against the module's own undefined symbols, so a new such import cannot go unwitnessed.
+-  set(AXML_WITNESSED malloc calloc realloc aligned_alloc strdup mmap mmap64 open open64 dup fopen
+-      fopen64 fdopen inflateInit2_ inflate)
++  if(EMSCRIPTEN)
++    # musl has no LFS64 symbols: mmap64/open64/fopen64 are #defines onto the
++    # plain names (module.cpp guards their wrappers out the same way).
++    set(AXML_WITNESSED malloc calloc realloc aligned_alloc strdup mmap open dup fopen
++        fdopen inflateInit2_ inflate)
++  else()
++    set(AXML_WITNESSED malloc calloc realloc aligned_alloc strdup mmap mmap64 open open64 dup fopen
++        fopen64 fdopen inflateInit2_ inflate)
++  endif()
+   # Each wrapped call is not the libc builtin the compiler knows: as a builtin, malloc is taken to
+   # touch no memory of ours, and the witness's reads around a direct call were folded to the values
+   # stored before it (measured) — the wrapper writes that memory.
+@@ -183,7 +243,11 @@ if(pybind11_FOUND)
+   # the exception machinery were interposed by any libstdc++ already in the process's global scope
+   # (an embedding host, LD_PRELOAD) — measured: a failed load's exception then aborted the process,
+   # and AOSP's allocations went past the witnessed malloc.
+-  target_link_options(_axml_core PRIVATE "LINKER:--exclude-libs,ALL")
++  if(NOT EMSCRIPTEN)
++    # wasm-ld has no --exclude-libs; a Pyodide side module has no LD_PRELOAD-style
++    # interposition surface, so the guard is moot there.
++    target_link_options(_axml_core PRIVATE "LINKER:--exclude-libs,ALL")
++  endif()
+   if(DEFINED SKBUILD)
+     install(TARGETS _axml_core DESTINATION axmlllm)
+   endif()
+diff --git a/native/androidfw_binding/module.cpp b/native/androidfw_binding/module.cpp
+index 40292af..2cb2aac 100644
+--- a/native/androidfw_binding/module.cpp
++++ b/native/androidfw_binding/module.cpp
+@@ -160,6 +160,7 @@ void* __wrap_mmap(void* a, size_t n, int prot, int flags, int fd, off_t off) {
+   if (p == MAP_FAILED && host_errno(errno)) witness_refusal("mmap", errno, n);
+   return p;
+ }
++#ifndef __EMSCRIPTEN__  // musl/emscripten has no LFS64 symbols (mmap64 is a #define)
+ void* __real_mmap64(void*, size_t, int, int, int, off64_t);
+ void* __wrap_mmap64(void* a, size_t n, int prot, int flags, int fd, off64_t off) {
+   witness_hit(kMmap64);
+@@ -167,6 +168,7 @@ void* __wrap_mmap64(void* a, size_t n, int prot, int flags, int fd, off64_t off)
+   if (p == MAP_FAILED && host_errno(errno)) witness_refusal("mmap", errno, n);
+   return p;
+ }
++#endif
+ // Opening a file inside Load: ANY failure is the host's — the loader never reached the bytes
+ // (a file removed or made unreadable after the lookup, a descriptor table full). A file REPLACED
+ // by one that opens is judged on what was loaded: in-process, the path is read twice;
+@@ -189,6 +191,7 @@ int __wrap_open(const char* path, int flags, ...) {
+ }
+ // The 64-bit-offset spellings: Python.h sets _FILE_OFFSET_BITS=64, so this file's own calls bind to
+ // them, while AOSP's static library binds the plain ones — both are wrapped.
++#ifndef __EMSCRIPTEN__  // musl/emscripten: open64/fopen64 are #defines, not symbols
+ int __real_open64(const char*, int, ...);
+ int __wrap_open64(const char* path, int flags, ...) {
+   witness_hit(kOpen64);
+@@ -210,6 +213,7 @@ FILE* __wrap_fopen64(const char* path, const char* mode) {
+   if (f == nullptr) witness_refusal("fopen", errno, 0);
+   return f;
+ }
++#endif  // !__EMSCRIPTEN__
+ int __real_dup(int);
+ int __wrap_dup(int fd) {
+   witness_hit(kDup);
+@@ -289,7 +293,11 @@ class ScopedWitness {
+ // this file's own calls to the 64-bit spellings): the link wraps both.
+ extern "C" int plain_open(const char*, int, ...) __asm__("open");
+ extern "C" FILE* plain_fopen(const char*, const char*) __asm__("fopen");
++#ifdef __EMSCRIPTEN__
++extern "C" void* plain_mmap(void*, size_t, int, int, int, off_t) __asm__("mmap");
++#else
+ extern "C" void* plain_mmap(void*, size_t, int, int, int, long) __asm__("mmap");
++#endif
+ // zlib's own allocator, refusing from the Nth call on: Z_MEM_ERROR deterministically, from
+ // inflateInit2 (its state) or from inflate (its window, allocated on the first call that needs it).
+ struct RefuseFrom {
+@@ -4945,7 +4953,27 @@ class ArscResolver {
+ 
+ }  // namespace
+ 
++#ifdef __EMSCRIPTEN__
++// liblog's host stderr logger calls its GetThreadId(), which has no branch for
++// emscripten (no __BIONIC__/__APPLE__/__linux__/_WIN32) — a missing return the
++// optimizer lowers to `unreachable`, so the FIRST AOSP log line traps the wasm
++// module. Install the same format minus the tid before any AOSP code can log.
++static void emscripten_stderr_logger(const struct __android_log_message* m) {
++  static const char log_characters[] = "XXVDIWEF";
++  int32_t priority = m->priority > ANDROID_LOG_SILENT ? ANDROID_LOG_FATAL : m->priority;
++  char priority_char = log_characters[priority];
++  const char* tag = m->tag ? m->tag : " nullptr";
++  if (m->file != nullptr)
++    fprintf(stderr, "%c %-8s: %s:%u %s\n", priority_char, tag, m->file, m->line, m->message);
++  else
++    fprintf(stderr, "%c %-8s: %s\n", priority_char, tag, m->message);
++}
++#endif
++
+ PYBIND11_MODULE(_axml_core, m) {
++#ifdef __EMSCRIPTEN__
++  __android_log_set_logger(emscripten_stderr_logger);
++#endif
+   m.doc() = "axmlllm native core — real AOSP libandroidfw (ResXMLTree) AXML parser";
+   // The page bounds, exported so a test can assert the MAGNITUDE and not merely the existence —
+   // review moved kMaxPageRows 12x and kMaxValueBytes 32x with the suite green.
+diff --git a/native/aosp_shim/include-wasm/sys/cdefs.h b/native/aosp_shim/include-wasm/sys/cdefs.h
+new file mode 100644
+index 0000000..76684dc
+--- /dev/null
++++ b/native/aosp_shim/include-wasm/sys/cdefs.h
+@@ -0,0 +1,19 @@
++/* wasm shim: emscripten's musl has no sys/cdefs.h (glibc/BSD header).
++ * AOSP headers include it for the __BEGIN_DECLS family only — provide the
++ * macros they use, nothing more. */
++#pragma once
++
++#ifdef __cplusplus
++#define __BEGIN_DECLS extern "C" {
++#define __END_DECLS }
++#else
++#define __BEGIN_DECLS
++#define __END_DECLS
++#endif
++
++#ifndef __CONCAT
++#define __CONCAT(x, y) x##y
++#endif
++#ifndef __STRING
++#define __STRING(x) #x
++#endif
+diff --git a/pyproject.toml b/pyproject.toml
+index 448dc5c..99c1c5e 100644
+--- a/pyproject.toml
++++ b/pyproject.toml
+@@ -44,11 +44,6 @@ build-dir = "build/{wheel_tag}"
+ [tool.scikit-build.cmake.define]
+ # Path to the AOSP checkout whose libandroidfw we compile. Override per-machine.
+ AOSP_ROOT = "/home/nyahumi/Project/aosp"
+-# AOSP code needs AOSP's own prebuilt clang + libc++ (system gcc fails on clang builtins /
+-# incfs iterators — see memory build-recipe). Machine-specific, like AOSP_ROOT.
+-# NOTE: wires `pip install` to use clang; still needs a full wheel-build run to verify.
+-CMAKE_C_COMPILER = "/home/nyahumi/Project/aosp/prebuilts/clang/host/linux-x86/clang-r574158/bin/clang"
+-CMAKE_CXX_COMPILER = "/home/nyahumi/Project/aosp/prebuilts/clang/host/linux-x86/clang-r574158/bin/clang++"
+ 
+ [tool.pytest.ini_options]
+ # Let `pytest` find the package (incl. the native _axml_core .so) without an
+diff --git a/src/axmlllm/_host.py b/src/axmlllm/_host.py
+index 6b2303d..099fcb7 100644
+--- a/src/axmlllm/_host.py
++++ b/src/axmlllm/_host.py
+@@ -6,7 +6,10 @@ by the anomaly detector that labels a table this host could not allocate. POSIX
+ 
+ from __future__ import annotations
+ 
+-import resource
++try:
++    import resource
++except ImportError:  # emscripten/wasm: no rlimits — a browser tab's memory cap
++    resource = None  # is the wasm heap limit, not an inherited POSIX limit.
+ 
+ 
+ def memory_limits() -> dict[str, int | bool]:
+@@ -19,6 +22,8 @@ def memory_limits() -> dict[str, int | bool]:
+     label repairs what that failure became inside AOSP, so it is stated wherever answers are given.
+     """
+     facts: dict[str, int | bool] = {}
++    if resource is None:
++        return facts
+     finite = [
+         soft
+         for soft, _ in (
+@@ -40,5 +45,7 @@ def memory_limits() -> dict[str, int | bool]:
+ 
+ def cpu_limit() -> int | None:
+     """Return the finite RLIMIT_CPU soft limit in seconds (a SIGXCPU's cause), or None."""
++    if resource is None:
++        return None
+     soft = resource.getrlimit(resource.RLIMIT_CPU)[0]
+     return None if soft == resource.RLIM_INFINITY else soft

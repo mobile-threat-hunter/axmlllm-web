@@ -1,0 +1,474 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>axmlllm — in-browser AndroidManifest analyzer</title>
+<!-- The ONE build pin. wasm-build/build.sh rewrites this line on every wheel
+     build; worker.js's ?v=, the wheel URL and the Pyodide CDN version all
+     derive from it (hand-synced ?v= sites drifted apart in dexllm-web). -->
+<script>
+window.__AXMLLLM_BUILD = { axmlllm: "b187b2b", wheel: "axmlllm-0.0.1-cp313-cp313-pyemscripten_2025_0_wasm32.whl", pyodide: "0.29.5" };
+</script>
+<style>
+  :root {
+    --bg:#000000;
+    --bg-1:#04050a;
+    --bg-2:#08090f;
+    --bg-3:#0d0f16;
+    --bg-4:#13161f;
+    --line-1:rgba(255,255,255,0.05);
+    --line-2:rgba(255,255,255,0.09);
+    --line-3:rgba(255,255,255,0.14);
+    --fg:#e6e9f0;
+    --fg-2:#b6bbc7;
+    --fg-3:#6f7480;
+    --brand:#6ba1ff;
+    --brand-soft:rgba(107,161,255,0.10);
+    --good:#5fdca0;
+    --warn:#f5b441;
+    --bad:#ff5e5e;
+    --info:#67c5e6;
+    --hl:rgba(107,161,255,0.14);
+    --f-ui:-apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", "Helvetica Neue", system-ui, sans-serif;
+    --f-mono:"JetBrains Mono", "SF Mono", ui-monospace, "Cascadia Code", Menlo, Consolas, monospace;
+  }
+  * { box-sizing:border-box; }
+  html, body { margin:0; background:var(--bg); color:var(--fg); font:13px/1.5 var(--f-ui); }
+  button, input, select { font:inherit; color:inherit; }
+  code, pre, .mono { font-family:var(--f-mono); font-size:12px; }
+
+  header { display:flex; align-items:center; gap:12px; padding:10px 18px; border-bottom:1px solid var(--line-2); background:var(--bg-1); flex-wrap:wrap; }
+  header h1 { margin:0; font-size:15px; font-weight:600; letter-spacing:.2px; }
+  .pill { font:11px var(--f-mono); color:var(--fg-2); border:1px solid var(--line-3); border-radius:999px; padding:1px 8px; }
+  #status { margin-left:auto; color:var(--fg-3); font-size:12px; }
+  #status.ready { color:var(--good); }
+  #status.err { color:var(--bad); }
+
+  main { padding:16px 18px 40px; max-width:1400px; margin:0 auto; }
+  #drop { border:1px dashed var(--line-3); border-radius:10px; padding:22px; text-align:center; color:var(--fg-2); background:var(--bg-2); cursor:pointer; transition:background .15s; }
+  #drop.over { background:var(--hl); border-color:var(--brand); }
+  #drop.disabled { opacity:.5; pointer-events:none; }
+  #drop b { color:var(--fg); }
+
+  #app[hidden] { display:none; }
+  .cards { display:grid; grid-template-columns:repeat(auto-fill, minmax(150px, 1fr)); gap:10px; margin:16px 0; }
+  .card { background:var(--bg-2); border:1px solid var(--line-2); border-radius:8px; padding:10px 12px; }
+  .card .k { color:var(--fg-3); font-size:11px; text-transform:uppercase; letter-spacing:.5px; }
+  .card .v { font:15px var(--f-mono); margin-top:2px; word-break:break-all; }
+  .v.ok { color:var(--good); } .v.warn { color:var(--warn); } .v.bad { color:var(--bad); }
+
+  nav { display:flex; gap:2px; border-bottom:1px solid var(--line-2); margin-bottom:14px; }
+  nav button { background:none; border:0; border-bottom:2px solid transparent; padding:8px 14px; color:var(--fg-3); cursor:pointer; }
+  nav button.on { color:var(--fg); border-bottom-color:var(--brand); }
+  .view[hidden] { display:none; }
+
+  h2 { font-size:12px; text-transform:uppercase; letter-spacing:.6px; color:var(--fg-3); margin:18px 0 8px; font-weight:600; }
+  table { border-collapse:collapse; width:100%; }
+  th, td { text-align:left; padding:5px 10px; border-bottom:1px solid var(--line-1); vertical-align:top; }
+  th { color:var(--fg-3); font-weight:500; font-size:11px; text-transform:uppercase; letter-spacing:.4px; position:sticky; top:0; background:var(--bg); }
+  td.mono { font-family:var(--f-mono); font-size:12px; word-break:break-all; }
+  .scroll { overflow-x:auto; }
+  .muted { color:var(--fg-3); }
+
+  .sev { display:inline-block; font:11px var(--f-mono); padding:0 6px; border-radius:4px; border:1px solid; }
+  .sev.high { color:var(--bad); border-color:rgba(255,94,94,.4); }
+  .sev.medium { color:var(--warn); border-color:rgba(245,180,65,.4); }
+  .sev.info { color:var(--info); border-color:rgba(103,197,230,.4); }
+  .anom { background:var(--bg-2); border:1px solid var(--line-2); border-radius:8px; padding:9px 12px; margin-bottom:8px; }
+  .anom .head { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+  .anom .kind { font:12px var(--f-mono); color:var(--fg); }
+  .anom .path { font:12px var(--f-mono); color:var(--brand); cursor:pointer; }
+  .anom .path:hover { text-decoration:underline; }
+  .anom .detail { color:var(--fg-2); margin-top:4px; }
+  .device-ignored { color:var(--warn); }
+
+  /* Manifest tree */
+  #tree { font:12px/1.65 var(--f-mono); background:var(--bg-1); border:1px solid var(--line-2); border-radius:8px; padding:10px 12px; overflow-x:auto; }
+  .node > .tag { cursor:pointer; user-select:none; }
+  .node > .tag::before { content:"▾ "; color:var(--fg-3); }
+  .node.closed > .tag::before { content:"▸ "; }
+  .node.leaf > .tag::before { content:"  "; }
+  .node.closed > .kids { display:none; }
+  .node .kids { padding-left:18px; border-left:1px solid var(--line-1); margin-left:4px; }
+  .node.flash > .tag { background:var(--hl); }
+  .tname { color:var(--brand); }
+  .tline { color:var(--fg-3); }
+  .attr { padding-left:22px; white-space:nowrap; }
+  .akey { color:#c7a6ff; } .aval { color:var(--fg); } .ares { color:var(--fg-3); } .atype { color:var(--info); }
+  .aref { color:var(--good); cursor:pointer; text-decoration:underline dotted; }
+  .resolved { display:block; padding-left:36px; color:var(--fg-2); white-space:pre-wrap; }
+  .extra { padding-left:22px; color:var(--warn); white-space:pre-wrap; }
+
+  .toolbar { display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-bottom:10px; }
+  .toolbar input, .toolbar select, .form input, .form select { background:var(--bg-2); border:1px solid var(--line-3); border-radius:6px; padding:5px 8px; }
+  .btn { background:var(--bg-3); border:1px solid var(--line-3); border-radius:6px; padding:5px 12px; cursor:pointer; }
+  .btn:hover { background:var(--bg-4); }
+  .btn.primary { border-color:var(--brand); color:var(--brand); }
+  .btn[disabled] { opacity:.4; cursor:default; }
+
+  .form { display:grid; grid-template-columns:max-content 1fr; gap:6px 12px; align-items:center; margin:10px 0; max-width:720px; }
+  .form label { color:var(--fg-2); font:12px var(--f-mono); }
+  .form .req::after { content:" *"; color:var(--bad); }
+  .desc { color:var(--fg-2); max-width:900px; white-space:pre-wrap; margin:6px 0; }
+  pre.json { background:var(--bg-1); border:1px solid var(--line-2); border-radius:8px; padding:10px 12px; overflow:auto; max-height:70vh; white-space:pre-wrap; word-break:break-all; }
+</style>
+</head>
+<body>
+<header>
+  <h1>axmlllm</h1>
+  <span class="pill" id="ver"></span>
+  <span id="status">starting…</span>
+</header>
+<main>
+  <div id="drop" class="disabled">
+    Drop an <b>APK</b> or a binary <b>AndroidManifest.xml</b> here, or click to choose.
+    <div class="muted" style="margin-top:4px">Parsed in your browser by real AOSP libandroidfw (wasm) + axmlllm — nothing is uploaded.</div>
+    <input type="file" id="file" hidden>
+  </div>
+
+  <div id="app" hidden>
+    <div class="cards" id="cards"></div>
+    <nav id="nav">
+      <button data-view="overview" class="on">Overview</button>
+      <button data-view="manifest">Manifest tree</button>
+      <button data-view="resources">Resources</button>
+      <button data-view="tools">Tool console</button>
+    </nav>
+
+    <section class="view" id="v-overview">
+      <h2>Anomalies <span class="muted" id="anom-count"></span></h2>
+      <div id="anoms"></div>
+      <h2>Permissions <span class="muted" id="perm-count"></span></h2>
+      <div class="scroll"><table id="perms"></table></div>
+      <h2>Components <span class="muted" id="comp-count"></span></h2>
+      <div class="scroll"><table id="comps"></table></div>
+    </section>
+
+    <section class="view" id="v-manifest" hidden>
+      <div class="toolbar">
+        <button class="btn" id="tree-expand">Expand all</button>
+        <button class="btn" id="tree-collapse">Collapse all</button>
+        <span class="muted">Click an <span class="aref">@0x7f…</span> reference to resolve it through the resource table.</span>
+      </div>
+      <div id="tree"></div>
+    </section>
+
+    <section class="view" id="v-resources" hidden>
+      <div class="toolbar">
+        <input id="res-type" placeholder="type_name (e.g. string)" size="20">
+        <button class="btn" id="res-go">List</button>
+        <span class="muted" style="margin-left:12px">or search strings:</span>
+        <input id="res-needle" placeholder="needle" size="20">
+        <button class="btn" id="res-search">Search</button>
+      </div>
+      <div class="toolbar">
+        <button class="btn" id="res-prev" disabled>◂ Prev</button>
+        <button class="btn" id="res-next" disabled>Next ▸</button>
+        <span class="muted" id="res-info"></span>
+      </div>
+      <div class="scroll"><table id="res"></table></div>
+    </section>
+
+    <section class="view" id="v-tools" hidden>
+      <div class="toolbar">
+        <select id="tool-name"></select>
+        <button class="btn primary" id="tool-run">Run</button>
+      </div>
+      <div class="desc" id="tool-desc"></div>
+      <div class="form" id="tool-form"></div>
+      <pre class="json" id="tool-out"></pre>
+    </section>
+  </div>
+</main>
+
+<script>
+"use strict";
+const BUILD = window.__AXMLLLM_BUILD;
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+
+$("ver").textContent = `axmlllm ${BUILD.axmlllm} · Pyodide ${BUILD.pyodide}`;
+
+// ── worker RPC ──
+const worker = new Worker("worker.js?v=" + BUILD.axmlllm);
+const pending = new Map();
+let nextId = 1;
+worker.onmessage = (e) => {
+  const m = e.data;
+  if (m.type === "progress") { setStatus(m.text); return; }
+  const p = pending.get(m.id);
+  if (!p) return;
+  pending.delete(m.id);
+  m.ok ? p.resolve(m.result) : p.reject(new Error(m.error));
+};
+function wcall(msg, transfer) {
+  const id = nextId++;
+  return new Promise((resolve, reject) => {
+    pending.set(id, { resolve, reject });
+    worker.postMessage({ id, ...msg }, transfer || []);
+  });
+}
+const tool = (name, args) => wcall({ type: "tool", name, args });
+
+function setStatus(text, cls) {
+  const s = $("status");
+  s.textContent = text;
+  s.className = cls || "";
+}
+
+let engineReady = false;
+wcall({ type: "init", build: BUILD }).then((r) => {
+  engineReady = true;
+  setStatus(`engine ready (Pyodide ${r.pyodide})`, "ready");
+  $("drop").classList.remove("disabled");
+}).catch((e) => setStatus("engine load failed: " + e.message, "err"));
+
+// ── file input ──
+const drop = $("drop");
+drop.addEventListener("click", () => $("file").click());
+$("file").addEventListener("change", (e) => { if (e.target.files[0]) loadFile(e.target.files[0]); });
+drop.addEventListener("dragover", (e) => { e.preventDefault(); drop.classList.add("over"); });
+drop.addEventListener("dragleave", () => drop.classList.remove("over"));
+drop.addEventListener("drop", (e) => {
+  e.preventDefault();
+  drop.classList.remove("over");
+  if (e.dataTransfer.files[0]) loadFile(e.dataTransfer.files[0]);
+});
+
+let session = null;   // { name, isApk, tools: TOOL_DEFINITIONS }
+
+async function loadFile(file) {
+  if (!engineReady) return;
+  setStatus(`parsing ${file.name}…`);
+  const t0 = performance.now();
+  try {
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    session = await wcall({ type: "open", name: file.name, bytes }, [bytes.buffer]);
+    const [summary, perms, comps, anoms, tree] = await Promise.all([
+      tool("analyze_manifest"), tool("list_permissions", { limit: 500 }),
+      tool("list_components", { limit: 500 }), tool("manifest_anomalies", { limit: 500 }),
+      tool("get_manifest_tree"),
+    ]);
+    renderCards(file.name, summary);
+    renderAnoms(anoms);
+    renderTable($("perms"), perms, ["name", "tag", "line", "device"], $("perm-count"));
+    renderTable($("comps"), comps, ["name", "tag", "line", "device"], $("comp-count"));
+    renderTree(tree);
+    renderToolSelect(session.tools);
+    resetResources();
+    $("app").hidden = false;
+    setStatus(`${file.name} — ${Math.round(performance.now() - t0)} ms`, "ready");
+  } catch (e) {
+    setStatus(`${file.name}: ${e.message}`, "err");
+  }
+}
+
+// ── overview ──
+function renderCards(name, s) {
+  const cls = (v, good) => (v === good ? "ok" : v === undefined ? "" : "warn");
+  const cards = [
+    ["file", name, ""],
+    ["package", s.package ?? "—", ""],
+    ["parse_status", s.parse_status, cls(s.parse_status, "ok")],
+    ["resources", s.resources_status ?? (session.isApk ? "—" : "n/a (manifest only)"), cls(s.resources_status, "ok")],
+    ["permissions", s.permission_count, ""],
+    ["components", s.component_count, ""],
+    ["anomalies", s.anomaly_count, s.anomaly_count ? "bad" : "ok"],
+  ];
+  // Anything else analyze_manifest reports (dropped elements, not-judged notes…) is shown as-is.
+  const known = new Set(["package", "parse_status", "resources_status", "permission_count", "component_count", "anomaly_count"]);
+  for (const [k, v] of Object.entries(s)) if (!known.has(k)) cards.push([k, typeof v === "object" ? JSON.stringify(v) : v, "warn"]);
+  $("cards").innerHTML = cards.map(([k, v, c]) =>
+    `<div class="card"><div class="k">${esc(k)}</div><div class="v ${c}">${esc(v)}</div></div>`).join("");
+}
+
+function renderAnoms(out) {
+  const list = out.anomalies || [];
+  const byKind = Object.entries(out.by_kind || {}).map(([k, n]) => `${k}×${n}`).join(", ");
+  $("anom-count").textContent = `(${out.total ?? list.length})${byKind ? " — " + byKind : ""}`;
+  if (out.error) { $("anoms").innerHTML = `<div class="anom detail">${esc(out.error)}</div>`; return; }
+  if (!list.length) { $("anoms").innerHTML = `<div class="muted">none detected</div>`; return; }
+  $("anoms").innerHTML = list.map((a) => {
+    const rest = Object.entries(a).filter(([k]) => !["kind", "severity", "path", "detail", "attr"].includes(k));
+    return `<div class="anom"><div class="head">
+      <span class="sev ${esc(a.severity)}">${esc(a.severity)}</span>
+      <span class="kind">${esc(a.kind)}</span>
+      ${a.path ? `<span class="path" data-path="${esc(a.path)}">${esc(a.path)}${a.attr ? " @" + esc(a.attr) : ""}</span>` : ""}
+    </div><div class="detail">${esc(a.detail || "")}</div>
+    ${rest.length ? `<div class="muted mono">${esc(rest.map(([k, v]) => `${k}=${JSON.stringify(v)}`).join("  "))}</div>` : ""}</div>`;
+  }).join("");
+}
+
+function renderTable(table, out, cols, countEl) {
+  const items = out.items || [];
+  if (countEl) countEl.textContent = `(${out.total ?? items.length})`;
+  if (out.error) { table.innerHTML = `<tr><td>${esc(out.error)}</td></tr>`; return; }
+  if (!items.length) { table.innerHTML = `<tr><td class="muted">none declared</td></tr>`; return; }
+  const extra = [...new Set(items.flatMap((i) => Object.keys(i)))].filter((k) => !cols.includes(k));
+  const all = cols.concat(extra);
+  table.innerHTML = `<tr>${all.map((c) => `<th>${esc(c)}</th>`).join("")}</tr>` +
+    items.map((i) => `<tr>${all.map((c) => {
+      const v = i[c];
+      const txt = v === undefined ? "" : typeof v === "object" ? JSON.stringify(v) : v;
+      const cl = c === "device" && v !== "read" ? "mono device-ignored" : "mono";
+      return `<td class="${cl}">${esc(txt)}</td>`;
+    }).join("")}</tr>`).join("");
+}
+
+// ── manifest tree ──
+// Each node gets the anomaly path spelling: tag[i] where i counts same-tag siblings.
+function renderTree(out) {
+  const el = $("tree");
+  if (!out.root) { el.textContent = out.error || "no tree"; return; }
+  el.innerHTML = nodeHtml(out.root, out.root.tag);
+}
+function nodeHtml(n, path) {
+  const kids = n.children || [];
+  const seen = {};
+  const kidHtml = kids.map((c) => {
+    const i = seen[c.tag] = (seen[c.tag] ?? -1) + 1;
+    return nodeHtml(c, `${path}/${c.tag}[${i}]`);
+  }).join("");
+  const attrs = (n.attributes || []).map(attrHtml).join("");
+  const extraKeys = Object.keys(n).filter((k) => !["tag", "line", "attributes", "children"].includes(k));
+  const extra = extraKeys.length
+    ? `<div class="extra">${esc(extraKeys.map((k) => `${k}: ${JSON.stringify(n[k])}`).join("\n"))}</div>` : "";
+  const leaf = !kids.length && !attrs && !extra;
+  return `<div class="node${leaf ? " leaf" : ""}" data-path="${esc(path)}">` +
+    `<span class="tag">&lt;<span class="tname">${esc(n.tag)}</span>&gt; <span class="tline">L${esc(n.line ?? "?")}</span></span>` +
+    `<div class="kids">${attrs}${extra}${kidHtml}</div></div>`;
+}
+function attrHtml(a) {
+  const isRef = typeof a.value === "string" && /^@0x[0-9a-f]{8}$/i.test(a.value);
+  const val = isRef
+    ? `<span class="aref" data-res="${esc(a.value.slice(1))}">${esc(a.value)}</span>`
+    : `<span class="aval">${esc(JSON.stringify(a.value))}</span>`;
+  const rest = Object.entries(a).filter(([k]) => !["key", "value", "resid", "type", "raw"].includes(k));
+  return `<div class="attr"><span class="akey">${esc(a.key)}</span>=${val}` +
+    (a.type ? ` <span class="atype">${esc(a.type)}</span>` : "") +
+    (a.resid ? ` <span class="ares">${esc(a.resid)}</span>` : "") +
+    (a.raw && a.raw !== a.value?.slice?.(1) ? ` <span class="ares">raw=${esc(a.raw)}</span>` : "") +
+    (rest.length ? ` <span class="device-ignored">${esc(rest.map(([k, v]) => `${k}=${JSON.stringify(v)}`).join(" "))}</span>` : "") +
+    `</div>`;
+}
+$("tree").addEventListener("click", async (e) => {
+  if (!getSelection().isCollapsed) return;
+  const ref = e.target.closest(".aref");
+  if (ref) {
+    const line = ref.closest(".attr");
+    const prev = line.querySelector(".resolved");
+    if (prev) { prev.remove(); return; }
+    const out = await tool("resolve_resource", { res_id: ref.dataset.res });
+    line.insertAdjacentHTML("beforeend", `<span class="resolved">${esc(JSON.stringify(out, null, 2))}</span>`);
+    return;
+  }
+  const tag = e.target.closest(".tag");
+  if (tag) tag.parentElement.classList.toggle("closed");
+});
+$("tree-expand").onclick = () => document.querySelectorAll("#tree .node").forEach((n) => n.classList.remove("closed"));
+$("tree-collapse").onclick = () => document.querySelectorAll("#tree .node").forEach((n, i) => i && n.classList.add("closed"));
+$("anoms").addEventListener("click", (e) => {
+  const p = e.target.closest(".path");
+  if (!p) return;
+  const node = document.querySelector(`#tree .node[data-path="${CSS.escape(p.dataset.path)}"]`);
+  if (!node) return;
+  showView("manifest");
+  for (let n = node; n && n.id !== "tree"; n = n.parentElement) n.classList?.remove("closed");
+  node.scrollIntoView({ block: "center" });
+  node.classList.add("flash");
+  setTimeout(() => node.classList.remove("flash"), 1500);
+});
+
+// ── resources ──
+let resQuery = null;  // { tool, args, offset }
+function resetResources() {
+  resQuery = null;
+  $("res").innerHTML = "";
+  $("res-info").textContent = session.isApk ? "" : "manifest-only upload: no resource table";
+  $("res-prev").disabled = $("res-next").disabled = true;
+}
+async function runRes(offset) {
+  resQuery.offset = offset;
+  const out = await tool(resQuery.tool, { ...resQuery.args, ...(resQuery.tool === "list_resources" ? { offset } : {}) });
+  if (out.error) { $("res").innerHTML = `<tr><td>${esc(out.error)}</td></tr>`; return; }
+  const rows = out.rows || out.items || out.hits || [];
+  const cols = [...new Set(rows.flatMap((r) => Object.keys(r)))];
+  $("res").innerHTML = `<tr>${cols.map((c) => `<th>${esc(c)}</th>`).join("")}</tr>` +
+    rows.map((r) => `<tr>${cols.map((c) => {
+      const v = r[c];
+      return `<td class="mono">${esc(v === undefined ? "" : typeof v === "object" ? JSON.stringify(v) : v)}</td>`;
+    }).join("")}</tr>`).join("");
+  const paged = resQuery.tool === "list_resources";
+  $("res-info").textContent = `${out.total ?? rows.length} total` + (paged ? ` · showing ${offset}–${offset + rows.length}` : "");
+  $("res-prev").disabled = !paged || offset === 0;
+  $("res-next").disabled = !paged || out.next_offset == null;
+  resQuery.next = out.next_offset;
+  resQuery.prevStack = resQuery.prevStack || [];
+}
+$("res-go").onclick = () => {
+  const t = $("res-type").value.trim();
+  resQuery = { tool: "list_resources", args: { limit: 100, ...(t ? { type_name: t } : {}) }, prevStack: [] };
+  runRes(0);
+};
+$("res-search").onclick = () => {
+  const needle = $("res-needle").value;
+  if (!needle) return;
+  resQuery = { tool: "search_resource_strings", args: { needle, ignore_case: true, limit: 200 }, prevStack: [] };
+  runRes(0);
+};
+$("res-next").onclick = () => { resQuery.prevStack.push(resQuery.offset); runRes(resQuery.next); };
+$("res-prev").onclick = () => runRes(resQuery.prevStack.pop() ?? 0);
+
+// ── tool console: forms generated from axmlllm's own TOOL_DEFINITIONS ──
+function schemaOf(t) { return t.input_schema || t.parameters || { properties: {} }; }
+function renderToolSelect(defs) {
+  const sel = $("tool-name");
+  const cur = sel.value;
+  sel.innerHTML = defs.map((t) => `<option>${esc(t.name)}</option>`).join("");
+  if (defs.some((t) => t.name === cur)) sel.value = cur;
+  renderToolForm();
+}
+function renderToolForm() {
+  const t = session.tools.find((d) => d.name === $("tool-name").value);
+  const s = schemaOf(t);
+  const req = new Set(s.required || []);
+  $("tool-desc").textContent = t.description || "";
+  $("tool-form").innerHTML = Object.entries(s.properties || {}).map(([k, p]) => {
+    const type = Array.isArray(p.type) ? p.type.join("|") : (p.type || "any");
+    const input = p.type === "boolean"
+      ? `<select data-k="${esc(k)}" data-t="boolean"><option value="">(default)</option><option>true</option><option>false</option></select>`
+      : `<input data-k="${esc(k)}" data-t="${esc(type)}" placeholder="${esc(type)}${p.default !== undefined ? " = " + esc(JSON.stringify(p.default)) : ""}" title="${esc(p.description || "")}" size="40">`;
+    return `<label class="${req.has(k) ? "req" : ""}" title="${esc(p.description || "")}">${esc(k)}</label>${input}`;
+  }).join("");
+  $("tool-out").textContent = "";
+}
+$("tool-name").onchange = renderToolForm;
+$("tool-run").onclick = async () => {
+  const args = {};
+  for (const el of $("tool-form").querySelectorAll("[data-k]")) {
+    const v = el.value.trim();
+    if (v === "") continue;
+    const t = el.dataset.t;
+    if (t === "boolean") args[el.dataset.k] = v === "true";
+    else if (t.includes("integer") || t.includes("number")) args[el.dataset.k] = Number(v);
+    else if (t.includes("array") || t.includes("object")) {
+      try { args[el.dataset.k] = JSON.parse(v); } catch { args[el.dataset.k] = v; }
+    } else args[el.dataset.k] = v;
+  }
+  $("tool-out").textContent = "running…";
+  const t0 = performance.now();
+  const out = await tool($("tool-name").value, args).catch((e) => ({ error: e.message }));
+  $("tool-out").textContent = `// ${$("tool-name").value}(${JSON.stringify(args)}) — ${Math.round(performance.now() - t0)} ms\n` +
+    JSON.stringify(out, null, 2);
+};
+
+// ── views ──
+function showView(v) {
+  for (const b of $("nav").querySelectorAll("button")) b.classList.toggle("on", b.dataset.view === v);
+  for (const s of document.querySelectorAll(".view")) s.hidden = s.id !== "v-" + v;
+}
+$("nav").addEventListener("click", (e) => { if (e.target.dataset.view) showView(e.target.dataset.view); });
+</script>
+</body>
+</html>
