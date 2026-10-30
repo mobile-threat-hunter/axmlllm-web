@@ -22,8 +22,7 @@ python3.13 -m venv .venv && .venv/bin/pip install pyodide-build
 ~/emsdk/emsdk install 4.0.9 && ~/emsdk/emsdk activate 4.0.9   # = `pyodide config get emscripten_version`
 ```
 
-`~/emsdk` is shared with dexllm-web (which builds with emcc 6.0.0) — re-activate the
-version you need before building either project.
+`build.sh` refuses to run unless the active `emcc` matches Pyodide's required version.
 
 ## Build + verify
 

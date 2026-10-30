@@ -6,7 +6,7 @@
 <title>axmlllm — in-browser AndroidManifest analyzer</title>
 <!-- The ONE build pin. wasm-build/build.sh rewrites this line on every wheel
      build; worker.js's ?v=, the wheel URL and the Pyodide CDN version all
-     derive from it (hand-synced ?v= sites drifted apart in dexllm-web). -->
+     derive from it, so the worker, wheel and runtime can never be mismatched. -->
 <script>
 window.__AXMLLLM_BUILD = { axmlllm: "b187b2b", wheel: "axmlllm-0.0.1-cp313-cp313-pyemscripten_2025_0_wasm32.whl", pyodide: "0.29.5" };
 </script>
