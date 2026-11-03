@@ -192,6 +192,27 @@ window.__AXMLLLM_BUILD = { axmlllm: "b187b2b", wheel: "axmlllm-0.0.1-cp313-cp313
   .form label { color:var(--fg-2); font:12px var(--f-mono); }
   .form .req::after { content:" *"; color:var(--bad); }
   .desc { color:var(--fg-2); max-width:900px; white-space:pre-wrap; margin:6px 0; }
+
+  /* copy-to-clipboard — dexllm-web's "⧉ copy" button: section/toolbar buttons copy a whole
+     list, .mini ones (shown on hover) copy one card, row, label value, anomaly or tree node. */
+  .copybtn {
+    flex:none; padding:3px 10px; border-radius:6px; cursor:pointer; user-select:none; white-space:nowrap;
+    color:var(--fg-3); background:var(--bg-1); box-shadow:inset 0 0 0 1px var(--line-3);
+    font:600 10.5px/1.4 var(--f-ui); letter-spacing:.02em; text-transform:none;
+    transition:background 150ms, color 150ms, box-shadow 150ms;
+  }
+  .copybtn:hover { color:var(--fg); background:rgba(var(--brand-rgb),0.10); box-shadow:inset 0 0 0 1px rgba(var(--brand-rgb),0.5); }
+  .copybtn:active { transform:translateY(0.5px); }
+  .copybtn.copied { color:var(--good); background:rgba(95,220,160,0.12); box-shadow:inset 0 0 0 1px var(--good); }
+  h2 .copybtn { margin-left:auto; }
+  .copybtn.mini { padding:0 6px; font-size:11px; opacity:0; transition:opacity 120ms, background 150ms, color 150ms, box-shadow 150ms; }
+  .card:hover .copybtn.mini, tr:hover .copybtn.mini, .anom:hover > .head .copybtn.mini,
+  .lbl > .head:hover .copybtn.mini, .node > .tag:hover .copybtn.mini, .copybtn.mini.copied { opacity:1; }
+  .card { position:relative; }
+  .card > .copybtn.mini { position:absolute; top:8px; right:8px; }
+  .anom > .head .copybtn.mini, .lbl > .head .copybtn.mini { margin-left:auto; }
+  .node > .tag .copybtn.mini { margin-left:8px; vertical-align:1px; }
+  td.rc { width:1%; white-space:nowrap; text-align:right; padding-left:4px; }
   pre.json { background:var(--bg-1); box-shadow:inset 0 0 0 1px var(--line-2); border-radius:10px; padding:12px 14px; overflow:auto; max-height:70vh; white-space:pre-wrap; word-break:break-all; }
 </style>
 </head>
@@ -222,13 +243,13 @@ window.__AXMLLLM_BUILD = { axmlllm: "b187b2b", wheel: "axmlllm-0.0.1-cp313-cp313
     </nav>
 
     <section class="view" id="v-overview">
-      <h2>Labels <span class="muted" id="lbl-count"></span></h2>
+      <h2>Labels <span class="muted" id="lbl-count"></span><span class="copybtn" data-fn="labels" title="Copy every label row as tab-separated text">⧉ copy</span></h2>
       <div id="labels"></div>
-      <h2>Anomalies <span class="muted" id="anom-count"></span></h2>
+      <h2>Anomalies <span class="muted" id="anom-count"></span><span class="copybtn" data-fn="anoms" title="Copy every anomaly as JSON">⧉ copy</span></h2>
       <div id="anoms"></div>
-      <h2>Permissions <span class="muted" id="perm-count"></span></h2>
+      <h2>Permissions <span class="muted" id="perm-count"></span><span class="copybtn" data-table="perms" title="Copy the table as tab-separated text">⧉ copy</span></h2>
       <div class="scroll"><table id="perms"></table></div>
-      <h2>Components <span class="muted" id="comp-count"></span></h2>
+      <h2>Components <span class="muted" id="comp-count"></span><span class="copybtn" data-table="comps" title="Copy the table as tab-separated text">⧉ copy</span></h2>
       <div class="scroll"><table id="comps"></table></div>
     </section>
 
@@ -236,6 +257,8 @@ window.__AXMLLLM_BUILD = { axmlllm: "b187b2b", wheel: "axmlllm-0.0.1-cp313-cp313
       <div class="toolbar">
         <button class="btn" id="tree-expand">Expand all</button>
         <button class="btn" id="tree-collapse">Collapse all</button>
+        <span class="copybtn" data-fn="treeXml" title="Copy the decoded manifest as XML text (attribute names as the tree shows them)">⧉ copy XML</span>
+        <span class="copybtn" data-fn="treeJson" title="Copy get_manifest_tree's JSON">⧉ copy JSON</span>
         <span class="muted">Click an <span class="aref">@0x7f…</span> reference to resolve it through the resource table.</span>
       </div>
       <div id="tree"></div>
@@ -253,6 +276,7 @@ window.__AXMLLLM_BUILD = { axmlllm: "b187b2b", wheel: "axmlllm-0.0.1-cp313-cp313
         <button class="btn" id="res-prev" disabled>◂ Prev</button>
         <button class="btn" id="res-next" disabled>Next ▸</button>
         <span class="muted" id="res-info"></span>
+        <span class="copybtn" data-table="res" title="Copy this page as tab-separated text">⧉ copy</span>
       </div>
       <div class="scroll"><table id="res"></table></div>
     </section>
@@ -261,6 +285,7 @@ window.__AXMLLLM_BUILD = { axmlllm: "b187b2b", wheel: "axmlllm-0.0.1-cp313-cp313
       <div class="toolbar">
         <select id="tool-name"></select>
         <button class="btn primary" id="tool-run">Run</button>
+        <span class="copybtn" data-fn="toolOut" title="Copy the tool output">⧉ copy</span>
       </div>
       <div class="desc" id="tool-desc"></div>
       <div class="form" id="tool-form"></div>
@@ -324,6 +349,7 @@ drop.addEventListener("drop", (e) => {
 });
 
 let session = null;   // { name, isApk, tools: TOOL_DEFINITIONS }
+let last = {};        // what the copy buttons read: { tree, anoms, labels }
 
 async function loadFile(file) {
   if (!engineReady) return;
@@ -337,6 +363,8 @@ async function loadFile(file) {
       tool("list_components", { limit: 500 }), tool("manifest_anomalies", { limit: 500 }),
       tool("get_manifest_tree"),
     ]);
+    copyReg.clear();
+    last = { tree, anoms: anoms.anomalies || [] };
     const appLabel = await renderLabels(tree);
     renderCards(file.name, summary, appLabel);
     renderAnoms(anoms);
@@ -352,6 +380,85 @@ async function loadFile(file) {
     setStatus(`${file.name}: ${e.message}`, "err");
   }
 }
+
+// ── copy to clipboard (dexllm-web's copyText: clipboard API, textarea fallback, green flash) ──
+// A button says what it copies: data-cid (a registered string), data-row (its table row,
+// tab-separated), data-table (a whole table), data-node (a tree element as XML) or data-fn.
+const copyReg = new Map();
+let copySeq = 0;
+function copyBtn(text, title) {
+  const id = String(++copySeq);
+  copyReg.set(id, text);
+  return `<span class="copybtn mini" data-cid="${id}" title="${esc(title)}">⧉</span>`;
+}
+const ROW_COPY = '<td class="rc"><span class="copybtn mini" data-row title="Copy this row (tab-separated)">⧉</span></td>';
+const treeNodes = new Map();   // tree path → node, for per-element copy
+const cellText = (td) => td.textContent.replace(/[\t\n]+/g, " ").trim();
+const rowTsv = (tr) => [...tr.cells].filter((c) => !c.classList.contains("rc")).map(cellText).join("\t");
+const tableTsv = (t) => [...t.rows].map(rowTsv).join("\n");
+function labelRowsTsv(groups) {
+  const lines = [];
+  for (const g of groups) {
+    const id = g.isRef ? "@" + g.rid : "literal";
+    const used = g.uses.map((u) => u.path).join(" ");
+    if (!g.isRef) lines.push([id, "any", g.value, used].join("\t"));
+    else if (g.out?.error) lines.push([id, "", "(unresolved: " + g.out.error + ")", used].join("\t"));
+    else for (const r of g.out?.variants || []) lines.push([id, r.config, r.value ?? "", used].join("\t"));
+  }
+  return lines.map((l) => l.replace(/\n/g, " ")).join("\n");
+}
+const xmlEsc = (v) => String(v).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+function toXml(n, ind = "") {
+  const attrs = (n.attributes || []).map((a) => ` ${a.key}="${xmlEsc(a.value)}"`).join("");
+  const kids = n.children || [];
+  if (!kids.length) return `${ind}<${n.tag}${attrs} />`;
+  return `${ind}<${n.tag}${attrs}>\n${kids.map((c) => toXml(c, ind + "  ")).join("\n")}\n${ind}</${n.tag}>`;
+}
+const COPY_FNS = {
+  labels: () => (last.labels?.length ? "label\tconfig\tvalue\tused_by\n" + labelRowsTsv(last.labels) : ""),
+  anoms: () => (last.anoms?.length ? JSON.stringify(last.anoms, null, 2) : ""),
+  treeXml: () => (last.tree?.root ? toXml(last.tree.root) : ""),
+  treeJson: () => (last.tree ? JSON.stringify(last.tree, null, 2) : ""),
+  toolOut: () => $("tool-out").textContent,
+};
+function copySource(b) {
+  const d = b.dataset;
+  if (d.cid) return copyReg.get(d.cid);
+  if (d.row !== undefined) return rowTsv(b.closest("tr"));
+  if (d.table) return $(d.table).rows.length ? tableTsv($(d.table)) : "";
+  if (d.node) return treeNodes.has(d.node) ? toXml(treeNodes.get(d.node)) : "";
+  if (d.fn) return COPY_FNS[d.fn]();
+  return "";
+}
+function copyFallback(text) {
+  try {
+    const ta = document.createElement("textarea");
+    ta.value = text; ta.style.position = "fixed"; ta.style.opacity = "0";
+    document.body.appendChild(ta); ta.focus(); ta.select();
+    const ok = document.execCommand("copy"); document.body.removeChild(ta);
+    return ok;
+  } catch (_) { return false; }
+}
+function copyText(text, btn) {
+  if (!text) return;   // nothing to copy → no flash
+  const flash = () => {
+    const label = btn.dataset.label ?? btn.textContent;
+    btn.dataset.label = label;
+    btn.classList.add("copied"); btn.textContent = btn.classList.contains("mini") ? "✓" : "copied ✓";
+    clearTimeout(btn._copyT);
+    btn._copyT = setTimeout(() => { btn.classList.remove("copied"); btn.textContent = label; }, 1000);
+  };
+  if (navigator.clipboard?.writeText) {
+    navigator.clipboard.writeText(text).then(flash).catch(() => { if (copyFallback(text)) flash(); });
+  } else if (copyFallback(text)) flash();
+}
+// Capture phase: a copy click must not also collapse a tree node or jump to the tree.
+document.addEventListener("click", (e) => {
+  const b = e.target.closest(".copybtn");
+  if (!b) return;
+  e.stopPropagation(); e.preventDefault();
+  copyText(copySource(b), b);
+}, true);
 
 // ── overview ──
 function renderCards(name, s, appLabel) {
@@ -370,7 +477,7 @@ function renderCards(name, s, appLabel) {
   const known = new Set(["package", "parse_status", "resources_status", "permission_count", "component_count", "anomaly_count"]);
   for (const [k, v] of Object.entries(s)) if (!known.has(k)) cards.push([k, typeof v === "object" ? JSON.stringify(v) : v, "warn"]);
   $("cards").innerHTML = cards.map(([k, v, c, more]) =>
-    `<div class="card"><div class="k">${esc(k)}</div><div class="v ${c}">${esc(v)}</div>` +
+    `<div class="card">${copyBtn(String(v), "Copy " + k)}<div class="k">${esc(k)}</div><div class="v ${c}">${esc(v)}</div>` +
     `${more ? `<div class="more">${esc(more)}</div>` : ""}</div>`).join("");
 }
 
@@ -386,6 +493,7 @@ function renderAnoms(out) {
       <span class="sev ${esc(a.severity)}">${esc(a.severity)}</span>
       <span class="kind">${esc(a.kind)}</span>
       ${a.path ? `<span class="path" data-path="${esc(a.path)}">${esc(a.path)}${a.attr ? " @" + esc(a.attr) : ""}</span>` : ""}
+      ${copyBtn(JSON.stringify(a, null, 2), "Copy this anomaly as JSON")}
     </div><div class="detail">${esc(a.detail || "")}</div>
     ${rest.length ? `<div class="muted mono">${esc(rest.map(([k, v]) => `${k}=${JSON.stringify(v)}`).join("  "))}</div>` : ""}</div>`;
   }).join("");
@@ -437,7 +545,8 @@ async function renderLabels(tree) {
   for (const g of groups.values()) if (g.isRef) g.out = await variantsOf(g.rid);
   $("lbl-count").textContent = `(${uses.length} declared · ${groups.size} distinct)`;
   if (!groups.size) { $("labels").innerHTML = `<div class="muted">no android:label declared</div>`; return null; }
-  $("labels").innerHTML = [...groups.values()].map(labelGroupHtml).join("");
+  last.labels = [...groups.values()];
+  $("labels").innerHTML = last.labels.map(labelGroupHtml).join("");
 
   const app = [...groups.values()].find((g) => g.uses.some((u) => u.tag === "application"));
   if (!app) return null;
@@ -464,7 +573,8 @@ function labelGroupHtml(g) {
   if (!g.isRef) {
     badge = `<span class="sev info">literal</span>`;
     const v = g.value === "" ? `<span class="muted">(empty string)</span>` : esc(g.value);
-    body = `<table><tr class="def"><td class="cfg"><span class="cfgtag">any</span></td><td class="val">${v}</td><td></td></tr></table>`;
+    body = `<table><tr class="def"><td class="cfg"><span class="cfgtag">any</span></td><td class="val">${v}</td><td></td>` +
+      `<td class="rc">${copyBtn(String(g.value), "Copy this value")}</td></tr></table>`;
   } else if (g.out.error) {
     badge = `<span class="sev medium">unresolved</span>`;
     body = `<div class="muted" style="margin-top:6px">${esc(g.out.error)}</div>`;
@@ -474,7 +584,7 @@ function labelGroupHtml(g) {
       ? `<span class="sev medium">differs by configuration · ${esc(o.distinct_values ?? "?")} values</span>`
       : `<span class="sev ok">same in every configuration</span>`;
     if (o.truncated || o.more) badge += ` <span class="sev high">list incomplete</span>`;
-    body = `<table><tr><th>config</th><th>value</th><th>notes</th></tr>` + rows.map((r) => {
+    body = `<table><tr><th>config</th><th>value</th><th>notes</th><th></th></tr>` + rows.map((r) => {
       const notes = [];
       if (r.type && r.type !== "string") notes.push(`type ${r.type}`);
       if (r.served_by && r.served_by !== r.config) notes.push(`device with this config is served ${r.served_by}`);
@@ -483,11 +593,12 @@ function labelGroupHtml(g) {
       for (const [k, v] of Object.entries(r))
         if (!["config", "type", "value", "served_by", "served_self", "no_device"].includes(k)) notes.push(`${k}=${JSON.stringify(v)}`);
       return `<tr class="${r.config === "default" ? "def" : ""}"><td class="cfg"><span class="cfgtag">${esc(r.config)}</span></td>` +
-        `<td class="val">${esc(r.value ?? "")}</td><td class="mono muted">${esc(notes.join(" · "))}</td></tr>`;
+        `<td class="val">${esc(r.value ?? "")}</td><td class="mono muted">${esc(notes.join(" · "))}</td>` +
+        `<td class="rc">${copyBtn(String(r.value ?? ""), "Copy this value")}</td></tr>`;
     }).join("") + `</table>`;
   }
   return `<div class="lbl"><div class="head"><span class="rid">${g.isRef ? "@" + esc(g.rid) : "literal"}</span>${badge}` +
-    `<span class="uses">used by ${usedBy}</span></div>${body}</div>`;
+    `<span class="uses">used by ${usedBy}</span>${copyBtn(labelRowsTsv([g]), "Copy this label's rows")}</div>${body}</div>`;
 }
 
 function renderTable(table, out, cols, countEl) {
@@ -497,13 +608,13 @@ function renderTable(table, out, cols, countEl) {
   if (!items.length) { table.innerHTML = `<tr><td class="muted">none declared</td></tr>`; return; }
   const extra = [...new Set(items.flatMap((i) => Object.keys(i)))].filter((k) => !cols.includes(k));
   const all = cols.concat(extra);
-  table.innerHTML = `<tr>${all.map((c) => `<th>${esc(c)}</th>`).join("")}</tr>` +
+  table.innerHTML = `<tr>${all.map((c) => `<th>${esc(c)}</th>`).join("")}<th></th></tr>` +
     items.map((i) => `<tr>${all.map((c) => {
       const v = i[c];
       const txt = v === undefined ? "" : typeof v === "object" ? JSON.stringify(v) : v;
       const cl = c === "device" && v !== "read" ? "mono device-ignored" : "mono";
       return `<td class="${cl}">${esc(txt)}</td>`;
-    }).join("")}</tr>`).join("");
+    }).join("")}${ROW_COPY}</tr>`).join("");
 }
 
 // ── manifest tree ──
@@ -511,9 +622,11 @@ function renderTable(table, out, cols, countEl) {
 function renderTree(out) {
   const el = $("tree");
   if (!out.root) { el.textContent = out.error || "no tree"; return; }
+  treeNodes.clear();
   el.innerHTML = nodeHtml(out.root, out.root.tag);
 }
 function nodeHtml(n, path) {
+  treeNodes.set(path, n);
   const kids = n.children || [];
   const seen = {};
   const kidHtml = kids.map((c) => {
@@ -526,7 +639,8 @@ function nodeHtml(n, path) {
     ? `<div class="extra">${esc(extraKeys.map((k) => `${k}: ${JSON.stringify(n[k])}`).join("\n"))}</div>` : "";
   const leaf = !kids.length && !attrs && !extra;
   return `<div class="node${leaf ? " leaf" : ""}" data-path="${esc(path)}">` +
-    `<span class="tag">&lt;<span class="tname">${esc(n.tag)}</span>&gt; <span class="tline">L${esc(n.line ?? "?")}</span></span>` +
+    `<span class="tag">&lt;<span class="tname">${esc(n.tag)}</span>&gt; <span class="tline">L${esc(n.line ?? "?")}</span>` +
+    `<span class="copybtn mini" data-node="${esc(path)}" title="Copy this element and its children as XML">⧉</span></span>` +
     `<div class="kids">${attrs}${extra}${kidHtml}</div></div>`;
 }
 function attrHtml(a) {
@@ -586,11 +700,11 @@ async function runRes(offset) {
   if (out.error) { $("res").innerHTML = `<tr><td>${esc(out.error)}</td></tr>`; return; }
   const rows = out.rows || out.items || out.hits || [];
   const cols = [...new Set(rows.flatMap((r) => Object.keys(r)))];
-  $("res").innerHTML = `<tr>${cols.map((c) => `<th>${esc(c)}</th>`).join("")}</tr>` +
+  $("res").innerHTML = `<tr>${cols.map((c) => `<th>${esc(c)}</th>`).join("")}<th></th></tr>` +
     rows.map((r) => `<tr>${cols.map((c) => {
       const v = r[c];
       return `<td class="mono">${esc(v === undefined ? "" : typeof v === "object" ? JSON.stringify(v) : v)}</td>`;
-    }).join("")}</tr>`).join("");
+    }).join("")}${ROW_COPY}</tr>`).join("");
   const paged = resQuery.tool === "list_resources";
   $("res-info").textContent = `${out.total ?? rows.length} total` + (paged ? ` · showing ${offset}–${offset + rows.length}` : "");
   $("res-prev").disabled = !paged || offset === 0;

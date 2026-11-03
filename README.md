@@ -21,6 +21,10 @@ WebAssembly. Nothing is uploaded.
 - **Resources** — paged resource-table listing and string search.
 - **Tool console** — every axmlllm tool, with forms generated from its own tool schema.
 
+Every list has a **⧉ copy** button (tab-separated tables, labels, anomalies as JSON, the
+manifest as XML or JSON, tool output), and each card, row, label value, anomaly and tree
+element has its own on hover.
+
 ## Run locally
 
 Any static server works (single-threaded, no COOP/COEP needed):

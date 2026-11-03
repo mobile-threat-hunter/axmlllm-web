@@ -12,7 +12,7 @@
     const buf = Uint8Array.from(atob("__APK_B64__"), (c) => c.charCodeAt(0)).buffer;
     await loadFile(new File([buf], "probe.apk"));
     r.status = document.getElementById("status").textContent;
-    r.cards = [...document.querySelectorAll(".card")].map((c) => c.innerText.replace(/\n/g, "="));
+    r.cards = [...document.querySelectorAll(".card")].map((c) => c.querySelector(".k").innerText + "=" + c.querySelector(".v").innerText);
     r.anoms = document.querySelectorAll(".anom").length;
     r.perms = document.querySelectorAll("#perms tr").length - 1;
     r.comps = document.querySelectorAll("#comps tr").length - 1;
@@ -51,6 +51,38 @@
     document.getElementById("tool-run").click();
     await until(() => document.getElementById("tool-out").textContent.startsWith("//"), 20000);
     r.toolOut = document.getElementById("tool-out").textContent.slice(0, 300);
+    // copy buttons: capture what each writes instead of touching the real clipboard
+    const copied = [];
+    Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText: async (t) => { copied.push(t); } } });
+    const copyOf = async (btn) => {
+      if (!btn) return null;
+      const n = copied.length;
+      btn.click();
+      await new Promise((s) => setTimeout(s, 50));
+      return copied.length > n ? copied[copied.length - 1] : null;
+    };
+    const pkg = r.cards.find((c) => c.startsWith("PACKAGE="))?.slice(8);
+    const lblBtn = document.querySelector('h2 .copybtn[data-fn="labels"]');
+    const c = {
+      card: (await copyOf(document.querySelector(".card .copybtn"))) === "probe.apk",
+      permsTable: /\S/.test((await copyOf(document.querySelector('h2 .copybtn[data-table="perms"]'))) || ""),
+      treeXml: ((await copyOf(document.querySelector('.copybtn[data-fn="treeXml"]'))) || "").startsWith("<manifest"),
+      treeNode: ((await copyOf(document.querySelector("#tree .node .copybtn"))) || "").startsWith("<manifest"),
+      toolOut: ((await copyOf(document.querySelector('.copybtn[data-fn="toolOut"]'))) || "").startsWith("//"),
+    };
+    const pkgCard = [...document.querySelectorAll(".card")].find((x) => x.querySelector(".k").textContent === "package");
+    if (pkg && pkg !== "—") c.packageCard = (await copyOf(pkgCard?.querySelector(".copybtn"))) === pkg;
+    const row = document.querySelector("#comps .rc .copybtn");
+    if (row) c.componentRow = ((await copyOf(row)) || "").includes("\t");
+    if (r.labelGroups) {
+      c.labels = ((await copyOf(lblBtn)) || "").startsWith("label\tconfig\tvalue\tused_by\n");
+      const v = document.querySelector("#labels tr .val");
+      const vbtn = v?.closest("tr").querySelector(".rc .copybtn");
+      if (vbtn && v.textContent !== "(empty string)") c.labelValue = (await copyOf(vbtn)) === v.textContent;
+    }
+    // a copy click must not toggle the tree node it sits on
+    c.treeNotToggled = !document.querySelector("#tree .node").classList.contains("closed");
+    r.copy = c;
   } catch (e) { r.error = String(e.stack || e); }
   return JSON.stringify(r);
 })()

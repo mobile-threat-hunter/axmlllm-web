@@ -63,6 +63,9 @@ for (const apk of apks) {
   if (r.unmappedPaths?.length) problems.push(`anomaly paths not in tree: ${r.unmappedPaths.join(", ")}`);
   if (!r.toolOptions) problems.push("tool console empty");
   if (!r.toolOut?.startsWith("//")) problems.push("tool console did not run");
+  const badCopy = Object.entries(r.copy || {}).filter(([, ok]) => !ok).map(([k]) => k);
+  if (!r.copy) problems.push("copy buttons not checked");
+  else if (badCopy.length) problems.push(`copy buttons wrong: ${badCopy.join(", ")}`);
   failed += problems.length ? 1 : 0;
   const { resolved, toolOut, ...shown } = r;
   console.log(`${problems.length ? "FAIL" : "ok  "} ${basename(apk)} ${JSON.stringify(shown)}`);
