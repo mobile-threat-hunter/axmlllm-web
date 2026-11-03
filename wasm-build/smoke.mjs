@@ -57,6 +57,11 @@ for (const apk of apks) {
   const cn = JSON.parse(py.globals.get("_class_names")(JSON.stringify([".Main", "Main", "a.b.C"])));
   const want = pkg ? [`${pkg}.Main`, `${pkg}.Main`, "a.b.C"] : [".Main", "Main", "a.b.C"];
   if (JSON.stringify(cn) !== JSON.stringify(want)) { failed++; row.push(`_class_names=${JSON.stringify(cn)}`); }
+  // the page's component list (worker _components): every <activity-alias> carries target_activity
+  const comps = JSON.parse(py.globals.get("_components")(500));
+  const aliases = (comps.items || []).filter((i) => i.tag === "activity-alias");
+  if (comps.error || aliases.some((i) => !("target_activity" in i))) { failed++; row.push("_components=NO TARGET"); }
+  else row.push(`aliases=${aliases.length}`);
   console.log(row.join("  "), `tools=${opened.tools.length}`);
 }
 console.log(failed ? `FAIL: ${failed} tool error(s)` : `ok: ${apks.length} APK(s), axmlllm ${build.axmlllm}`);

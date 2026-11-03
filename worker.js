@@ -54,6 +54,25 @@ def _class_names(names_json):
     return json.dumps([_class_name(pkg, n) if pkg and isinstance(n, str) and n else n
                        for n in json.loads(names_json)])
 
+# list_components for the page, plus target_activity on each <activity-alias>: the class the
+# alias launches, read as the device reads it (by ResID, then buildClassName). An alias's own
+# name is only the component name launchers see; it names no class.
+def _components(limit):
+    from axmlllm.manifest.dispatch import _class_name
+    from axmlllm.manifest.model import _COMPONENT_TAGS
+    from axmlllm.manifest.reads import non_resource_string
+    from axmlllm.manifest.styleables import ATTR
+    out = tools.execute("list_components", {"limit": limit}, _m)
+    if _m is None or out.get("error"):
+        return json.dumps(out, default=str)
+    elems = [e for e in _m.iter() if e.tag in _COMPONENT_TAGS][out.get("offset", 0):]
+    for item, e in zip(out.get("items", []), elems):
+        if e.tag != "activity-alias" or item.get("tag") != e.tag or item.get("line") != e.line:
+            continue
+        raw = non_resource_string(e, ATTR["targetActivity"])
+        item["target_activity"] = _class_name(_m.package, raw) if raw and _m.package else raw
+    return json.dumps(out, default=str)
+
 def _tool(name, args_json):
     if _m is None:
         return json.dumps({"error": "no APK loaded"})
@@ -111,6 +130,7 @@ self.onmessage = async (e) => {
       if (type === "open") result = open(e.data.name, e.data.bytes);
       else if (type === "tool") result = tool(e.data.name, e.data.args);
       else if (type === "tree") result = JSON.parse(py.globals.get("_tree")());
+      else if (type === "components") result = JSON.parse(py.globals.get("_components")(e.data.limit));
       else if (type === "classnames") result = JSON.parse(py.globals.get("_class_names")(JSON.stringify(e.data.names)));
       else throw new Error(`unknown message type: ${type}`);
     }

@@ -40,6 +40,9 @@
     const cname = (i) => crows.map((t) => t.cells[i]?.textContent);
     r.compNames = cname(ccols.indexOf("name")).slice(0, 3);
     r.relativeNames = cname(ccols.indexOf("name")).filter((n) => n?.startsWith("."));
+    // every <activity-alias> row names the class it launches (targetActivity, package-qualified)
+    const tcol = ccols.indexOf("target_activity");
+    r.aliasTargets = crows.filter((t) => t.dataset.kind === "activity-alias").map((t) => t.cells[tcol]?.textContent ?? null);
     r.restored = ccols.includes("declared_name") ? cname(ccols.indexOf("declared_name")).filter(Boolean).length : 0;
     r.treeClasses = [...document.querySelectorAll("#tree .aclass")].map((a) => a.textContent).slice(0, 2);
     r.labelCard = [...document.querySelectorAll(".card")].find((c) => c.querySelector(".k").textContent === "label")?.querySelector(".v").textContent;

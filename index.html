@@ -387,7 +387,7 @@ async function loadFile(file) {
     session = await wcall({ type: "open", name: file.name, bytes }, [bytes.buffer]);
     const [summary, perms, comps, anoms, tree] = await Promise.all([
       tool("analyze_manifest"), tool("list_permissions", { limit: 500 }),
-      tool("list_components", { limit: 500 }), tool("manifest_anomalies", { limit: 500 }),
+      wcall({ type: "components", limit: 500 }), tool("manifest_anomalies", { limit: 500 }),
       wcall({ type: "tree" }),   // whole tree, not the response-budgeted get_manifest_tree
     ]);
     copyReg.clear();
@@ -397,8 +397,9 @@ async function loadFile(file) {
     renderCards(file.name, summary, appLabel);
     renderAnoms(anoms);
     renderTable($("perms"), perms, ["name", "tag", "line", "device"], $("perm-count"));
-    renderComps(comps, ["name", ...(comps.items?.some((i) => i.declared_name) ? ["declared_name"] : []),
-      "tag", "line", "device"]);
+    const has = (k) => comps.items?.some((i) => k in i);
+    renderComps(comps, ["name", ...(has("target_activity") ? ["target_activity"] : []),
+      ...(has("declared_name") ? ["declared_name"] : []), "tag", "line", "device"]);
     renderTree(tree);
     renderToolSelect(session.tools);
     resetResources();
@@ -534,12 +535,14 @@ function renderAnoms(out) {
 // android:name of a class-bearing element as the device builds it: ".Main" / "Main" get the
 // manifest package prepended. The rule runs in the worker (axmlllm's buildClassName replay).
 const CLASS_TAGS = new Set(["application", "activity", "activity-alias", "service", "receiver", "provider", "instrumentation"]);
+const TARGET_RESID = "0x01010202";   // android:targetActivity of an <activity-alias>
 const classOf = new WeakMap();   // tree attribute → the class name the device builds from it
 async function qualifyNames(comps, tree) {
   const attrs = [];
   const walk = (n) => {
     if (CLASS_TAGS.has(n.tag)) for (const a of n.attributes || [])
-      if (a.resid === NAME_RESID && typeof a.value === "string" && a.value && !/^@0x/i.test(a.value)) attrs.push(a);
+      if ((a.resid === NAME_RESID || (n.tag === "activity-alias" && a.resid === TARGET_RESID)) &&
+          typeof a.value === "string" && a.value && !/^@0x/i.test(a.value)) attrs.push(a);
     (n.children || []).forEach(walk);
   };
   if (tree.root) walk(tree.root);

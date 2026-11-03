@@ -65,6 +65,7 @@ for (const apk of apks) {
   if (r.relativeNames?.length && !r.cards?.includes("PACKAGE=—")) problems.push(`component names not restored: ${r.relativeNames.join(", ")}`);
   if (r.restored && !r.treeClasses?.length) problems.push("restored class names not shown in the tree");
   if (r.comps && (!r.kindsGrouped || !r.kindFilter)) problems.push(`components not grouped/filterable by kind: ${JSON.stringify(r.compKinds)}`);
+  if (r.aliasTargets?.some((x) => x === null || x.startsWith("."))) problems.push(`alias target missing or package-relative: ${JSON.stringify(r.aliasTargets)}`);
   if (r.labelCard === undefined) problems.push("no label card");
   if (r.unmappedPaths?.length) problems.push(`anomaly paths not in tree: ${r.unmappedPaths.join(", ")}`);
   if (!r.toolOptions) problems.push("tool console empty");
