@@ -20,6 +20,13 @@
     // every anomaly path must map onto a tree node
     const paths = [...document.querySelectorAll(".anom .path")].map((p) => p.dataset.path);
     r.unmappedPaths = paths.filter((p) => !document.querySelector(`#tree .node[data-path="${CSS.escape(p)}"]`));
+    // labels: groups, per-config rows, and every "used by" link must map onto a tree node too
+    r.labelCard = [...document.querySelectorAll(".card")].find((c) => c.querySelector(".k").textContent === "label")?.querySelector(".v").textContent;
+    r.labelGroups = document.querySelectorAll("#labels .lbl").length;
+    r.labelRows = [...document.querySelectorAll("#labels .lbl tr")].filter((t) => t.querySelector("td")).map((t) => t.querySelector(".cfgtag").textContent + "=" + t.querySelector(".val").textContent);
+    r.labelUnresolved = [...document.querySelectorAll("#labels .sev")].filter((s) => s.textContent === "unresolved").length;
+    const lpaths = [...document.querySelectorAll("#labels .path")].map((p) => p.dataset.path);
+    r.unmappedPaths.push(...lpaths.filter((p) => !document.querySelector(`#tree .node[data-path="${CSS.escape(p)}"]`)));
     // resolve the first reference in the tree
     const ref = document.querySelector("#tree .aref");
     if (ref) {

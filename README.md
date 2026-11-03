@@ -10,8 +10,12 @@ WebAssembly. Nothing is uploaded.
 
 ## Views
 
-- **Overview** — package summary, manifest anomalies (click a path to jump into the
-  tree), permissions, components.
+- **Overview** — package summary, labels, manifest anomalies (click a path to jump into
+  the tree), permissions, components.
+  - **Labels** — every `android:label` (matched by ResID `0x01010001`), each with its value
+    in every configuration that defines it (`resource_config_variants`); the summary card
+    shows the app label and flags one that differs by locale. No locale matching is done in
+    the page — what a given device locale selects is axmlllm issue #20.
 - **Manifest tree** — the parsed element tree with resource IDs, raw value types, and
   click-to-resolve `@0x7f…` references.
 - **Resources** — paged resource-table listing and string search.

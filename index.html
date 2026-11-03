@@ -12,42 +12,78 @@ window.__AXMLLLM_BUILD = { axmlllm: "b187b2b", wheel: "axmlllm-0.0.1-cp313-cp313
 </script>
 <style>
   :root {
+    /* dexllm-web's surface system (pure black, layered off-blacks, rgba lines), with the
+       brand taken from the axmlllm logo's violet instead of dexllm's blue. */
     --bg:#000000;
-    --bg-1:#04050a;
-    --bg-2:#08090f;
-    --bg-3:#0d0f16;
-    --bg-4:#13161f;
+    --bg-1:#05040a;
+    --bg-2:#0a0810;
+    --bg-3:#100d17;
+    --bg-4:#17131f;
     --line-1:rgba(255,255,255,0.05);
     --line-2:rgba(255,255,255,0.09);
     --line-3:rgba(255,255,255,0.14);
-    --fg:#e6e9f0;
-    --fg-2:#b6bbc7;
-    --fg-3:#6f7480;
-    --brand:#6ba1ff;
-    --brand-soft:rgba(107,161,255,0.10);
+    --fg:#ebe7f2;
+    --fg-2:#bdb6c9;
+    --fg-3:#767082;
+    --brand:#b48cff;
+    --brand-rgb:180,140,255;
+    --brand-soft:rgba(var(--brand-rgb),0.10);
     --good:#5fdca0;
     --warn:#f5b441;
     --bad:#ff5e5e;
     --info:#67c5e6;
-    --hl:rgba(107,161,255,0.14);
-    --f-ui:-apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", "Helvetica Neue", system-ui, sans-serif;
+    --hl:rgba(var(--brand-rgb),0.14);
+    --e-out:cubic-bezier(0.16,1,0.3,1);
+    --f-ui:-apple-system, BlinkMacSystemFont, "Inter", "Segoe UI Variable Display", "Segoe UI", "Helvetica Neue", system-ui, sans-serif;
     --f-mono:"JetBrains Mono", "SF Mono", ui-monospace, "Cascadia Code", Menlo, Consolas, monospace;
   }
   * { box-sizing:border-box; }
-  html, body { margin:0; background:var(--bg); color:var(--fg); font:13px/1.5 var(--f-ui); }
+  html, body { margin:0; min-height:100%; }
+  body {
+    background:var(--bg); color:var(--fg); font:13px/1.55 var(--f-ui);
+    -webkit-font-smoothing:antialiased; -moz-osx-font-smoothing:grayscale; text-rendering:optimizeLegibility;
+    background-image:
+      radial-gradient(1200px 600px at 75% -10%, rgba(var(--brand-rgb),0.06), transparent 60%),
+      radial-gradient(900px 600px at 0% 100%, rgba(var(--brand-rgb),0.03), transparent 60%);
+    background-attachment:fixed;
+  }
   button, input, select { font:inherit; color:inherit; }
   code, pre, .mono { font-family:var(--f-mono); font-size:12px; }
+  * { scrollbar-width:thin; scrollbar-color:rgba(255,255,255,0.10) transparent; }
+  *::-webkit-scrollbar { width:9px; height:9px; }
+  *::-webkit-scrollbar-thumb { background:rgba(255,255,255,0.08); border-radius:999px; border:2px solid transparent; background-clip:padding-box; }
+  *::-webkit-scrollbar-thumb:hover { background:rgba(255,255,255,0.18); background-clip:padding-box; }
+  ::selection { background:rgba(var(--brand-rgb),0.30); color:#fff; }
 
-  header { display:flex; align-items:center; gap:12px; padding:10px 18px; border-bottom:1px solid var(--line-2); background:var(--bg-1); flex-wrap:wrap; }
-  header h1 { margin:0; font-size:15px; font-weight:600; letter-spacing:.2px; }
-  .pill { font:11px var(--f-mono); color:var(--fg-2); border:1px solid var(--line-3); border-radius:999px; padding:1px 8px; }
-  #status { margin-left:auto; color:var(--fg-3); font-size:12px; }
+  header {
+    position:sticky; top:0; z-index:10;
+    display:flex; align-items:center; gap:14px; padding:12px 22px; flex-wrap:wrap;
+    background:linear-gradient(180deg, rgba(16,13,23,0.85) 0%, rgba(10,8,16,0.85) 100%);
+    backdrop-filter:blur(14px) saturate(140%); -webkit-backdrop-filter:blur(14px) saturate(140%);
+    box-shadow:inset 0 -1px 0 var(--line-1), inset 0 1px 0 rgba(255,255,255,0.03), 0 1px 0 rgba(0,0,0,0.8);
+  }
+  header h1 { margin:0; font:600 15px var(--f-mono); letter-spacing:.2px; }
+  header h1 span { color:var(--brand); }
+  .pill {
+    font:500 11px/1 var(--f-mono); color:var(--fg-3); padding:4px 10px; border-radius:999px; white-space:nowrap;
+    background:linear-gradient(180deg, var(--bg-3) 0%, var(--bg-2) 100%); box-shadow:inset 0 0 0 1px var(--line-2);
+  }
+  .sub { color:var(--fg-3); font:500 11px/1.4 var(--f-ui); letter-spacing:.02em; }
+  #status { margin-left:auto; color:var(--fg-3); font-size:12px; display:flex; align-items:center; gap:7px; }
+  #status::before { content:""; width:7px; height:7px; border-radius:50%; background:var(--fg-3); box-shadow:0 0 0 3px rgba(255,255,255,0.04); }
   #status.ready { color:var(--good); }
+  #status.ready::before { background:var(--good); box-shadow:0 0 0 3px rgba(95,220,160,0.14), 0 0 8px rgba(95,220,160,0.5); }
   #status.err { color:var(--bad); }
+  #status.err::before { background:var(--bad); box-shadow:0 0 0 3px rgba(255,94,94,0.14); }
 
-  main { padding:16px 18px 40px; max-width:1400px; margin:0 auto; }
-  #drop { border:1px dashed var(--line-3); border-radius:10px; padding:22px; text-align:center; color:var(--fg-2); background:var(--bg-2); cursor:pointer; transition:background .15s; }
-  #drop.over { background:var(--hl); border-color:var(--brand); }
+  main { padding:18px 22px 48px; max-width:1400px; margin:0 auto; }
+  #drop {
+    border:1px dashed var(--line-3); border-radius:12px; padding:18px; text-align:center; color:var(--fg-2);
+    background:linear-gradient(180deg, var(--bg-2) 0%, var(--bg-1) 100%); cursor:pointer;
+    transition:background 200ms var(--e-out), border-color 200ms var(--e-out), box-shadow 200ms var(--e-out);
+  }
+  #drop:hover { border-color:rgba(var(--brand-rgb),0.45); }
+  #drop.over { background:var(--hl); border-color:var(--brand); box-shadow:0 0 0 4px rgba(var(--brand-rgb),0.10); }
   #drop.disabled { pointer-events:none; }
   #drop.disabled .droptext { opacity:.5; }
   #drop b { color:var(--fg); }
@@ -55,45 +91,72 @@ window.__AXMLLLM_BUILD = { axmlllm: "b187b2b", wheel: "axmlllm-0.0.1-cp313-cp313
      card collapses to the one-line strip above the results (still a drop target). */
   #drop:not(.loaded) { display:flex; flex-direction:column; align-items:center; gap:12px; margin:6vh auto 0; width:max-content; max-width:92vw; padding:22px 28px; background:transparent; }
   #drop.over:not(.loaded) { background:var(--hl); }
-  #droplogo { display:block; width:300px; max-width:72vw; height:auto; border-radius:10px; pointer-events:none; }
+  /* lighten: the logo's black backdrop melts into the page glow instead of showing a box */
+  #droplogo { display:block; width:300px; max-width:72vw; height:auto; border-radius:10px; pointer-events:none; mix-blend-mode:lighten; }
   #drop.loaded #droplogo { display:none; }
   @media (max-width:720px) { #droplogo { width:220px; } }
 
   #app[hidden] { display:none; }
-  .cards { display:grid; grid-template-columns:repeat(auto-fill, minmax(150px, 1fr)); gap:10px; margin:16px 0; }
-  .card { background:var(--bg-2); border:1px solid var(--line-2); border-radius:8px; padding:10px 12px; }
-  .card .k { color:var(--fg-3); font-size:11px; text-transform:uppercase; letter-spacing:.5px; }
-  .card .v { font:15px var(--f-mono); margin-top:2px; word-break:break-all; }
+  .cards { display:grid; grid-template-columns:repeat(auto-fill, minmax(160px, 1fr)); gap:10px; margin:16px 0 18px; }
+  .card {
+    background:linear-gradient(180deg, var(--bg-3) 0%, var(--bg-2) 100%); border-radius:10px; padding:11px 14px;
+    box-shadow:inset 0 0 0 1px var(--line-2), inset 0 1px 0 rgba(255,255,255,0.03);
+    transition:box-shadow 200ms var(--e-out), transform 200ms var(--e-out);
+  }
+  .card:hover { box-shadow:inset 0 0 0 1px rgba(var(--brand-rgb),0.30), 0 0 0 3px rgba(var(--brand-rgb),0.06); }
+  .card .k { color:var(--fg-3); font-size:10.5px; text-transform:uppercase; letter-spacing:.06em; font-weight:600; }
+  .card .v { font:15px var(--f-mono); margin-top:3px; overflow-wrap:anywhere; }
+  .card .v.text { font:600 15px var(--f-ui); }
+  .card .more { color:var(--fg-3); font-size:11px; margin-top:2px; }
+  .card.wide { grid-column:span 2; }
   .v.ok { color:var(--good); } .v.warn { color:var(--warn); } .v.bad { color:var(--bad); }
 
-  nav { display:flex; gap:2px; border-bottom:1px solid var(--line-2); margin-bottom:14px; }
-  nav button { background:none; border:0; border-bottom:2px solid transparent; padding:8px 14px; color:var(--fg-3); cursor:pointer; }
-  nav button.on { color:var(--fg); border-bottom-color:var(--brand); }
+  nav { display:flex; gap:4px; padding:4px; margin-bottom:16px; width:max-content; max-width:100%; overflow-x:auto;
+        background:var(--bg-1); border-radius:10px; box-shadow:inset 0 0 0 1px var(--line-2); }
+  nav button { background:none; border:0; border-radius:7px; padding:6px 14px; color:var(--fg-3); cursor:pointer; white-space:nowrap;
+               transition:color 160ms var(--e-out), background 160ms var(--e-out); }
+  nav button:hover { color:var(--fg-2); background:rgba(255,255,255,0.03); }
+  nav button.on { color:var(--fg); background:linear-gradient(180deg, rgba(var(--brand-rgb),0.20), rgba(var(--brand-rgb),0.08));
+                  box-shadow:inset 0 0 0 1px rgba(var(--brand-rgb),0.35); }
   .view[hidden] { display:none; }
 
-  h2 { font-size:12px; text-transform:uppercase; letter-spacing:.6px; color:var(--fg-3); margin:18px 0 8px; font-weight:600; }
+  h2 { font-size:11px; text-transform:uppercase; letter-spacing:.08em; color:var(--fg-3); margin:22px 0 9px; font-weight:600; display:flex; align-items:center; gap:8px; }
+  h2::before { content:""; width:3px; height:12px; border-radius:2px; background:var(--brand); opacity:.8; }
+  .scroll { overflow-x:auto; border-radius:10px; box-shadow:inset 0 0 0 1px var(--line-2); background:var(--bg-1); }
   table { border-collapse:collapse; width:100%; }
-  th, td { text-align:left; padding:5px 10px; border-bottom:1px solid var(--line-1); vertical-align:top; }
-  th { color:var(--fg-3); font-weight:500; font-size:11px; text-transform:uppercase; letter-spacing:.4px; position:sticky; top:0; background:var(--bg); }
+  th, td { text-align:left; padding:6px 12px; border-bottom:1px solid var(--line-1); vertical-align:top; }
+  tr:last-child td { border-bottom:0; }
+  tr:hover td { background:rgba(255,255,255,0.02); }
+  th { color:var(--fg-3); font-weight:600; font-size:10.5px; text-transform:uppercase; letter-spacing:.06em; position:sticky; top:0; background:var(--bg-2); }
   td.mono { font-family:var(--f-mono); font-size:12px; word-break:break-all; }
-  .scroll { overflow-x:auto; }
   .muted { color:var(--fg-3); }
 
-  .sev { display:inline-block; font:11px var(--f-mono); padding:0 6px; border-radius:4px; border:1px solid; }
-  .sev.high { color:var(--bad); border-color:rgba(255,94,94,.4); }
-  .sev.medium { color:var(--warn); border-color:rgba(245,180,65,.4); }
-  .sev.info { color:var(--info); border-color:rgba(103,197,230,.4); }
-  .anom { background:var(--bg-2); border:1px solid var(--line-2); border-radius:8px; padding:9px 12px; margin-bottom:8px; }
-  .anom .head { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+  .sev { display:inline-block; font:600 10.5px/1.5 var(--f-ui); letter-spacing:.03em; padding:1px 8px; border-radius:999px; }
+  .sev.high { color:var(--bad); background:rgba(255,94,94,0.10); box-shadow:inset 0 0 0 1px rgba(255,94,94,.34); }
+  .sev.medium, .sev.warn { color:var(--warn); background:rgba(245,180,65,0.10); box-shadow:inset 0 0 0 1px rgba(245,180,65,.34); }
+  .sev.info { color:var(--info); background:rgba(103,197,230,0.10); box-shadow:inset 0 0 0 1px rgba(103,197,230,.34); }
+  .sev.ok { color:var(--good); background:rgba(95,220,160,0.10); box-shadow:inset 0 0 0 1px rgba(95,220,160,.30); }
+  .anom, .lbl { background:linear-gradient(180deg, var(--bg-2) 0%, var(--bg-1) 100%); box-shadow:inset 0 0 0 1px var(--line-2); border-radius:10px; padding:10px 14px; margin-bottom:8px; }
+  .anom .head, .lbl .head { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
   .anom .kind { font:12px var(--f-mono); color:var(--fg); }
-  .anom .path { font:12px var(--f-mono); color:var(--brand); cursor:pointer; }
-  .anom .path:hover { text-decoration:underline; }
+  .anom .path, .lbl .path { font:12px var(--f-mono); color:var(--brand); cursor:pointer; }
+  .anom .path:hover, .lbl .path:hover { text-decoration:underline; }
   .anom .detail { color:var(--fg-2); margin-top:4px; }
   .device-ignored { color:var(--warn); }
 
+  /* Labels */
+  .lbl .rid { font:12px var(--f-mono); color:var(--fg); }
+  .lbl .uses { color:var(--fg-3); font-size:12px; }
+  .lbl table { margin-top:8px; }
+  .lbl td.cfg { width:1%; white-space:nowrap; }
+  .lbl td.val { font:13px var(--f-ui); color:var(--fg); word-break:break-word; }
+  .lbl tr.def td.val { font-weight:600; }
+  .cfgtag { font:11px var(--f-mono); color:var(--fg-2); padding:1px 7px; border-radius:6px; background:var(--bg-3); box-shadow:inset 0 0 0 1px var(--line-2); }
+  tr.def .cfgtag { color:var(--brand); box-shadow:inset 0 0 0 1px rgba(var(--brand-rgb),0.35); }
+
   /* Manifest tree */
-  #tree { font:12px/1.65 var(--f-mono); background:var(--bg-1); border:1px solid var(--line-2); border-radius:8px; padding:10px 12px; overflow-x:auto; }
-  .node > .tag { cursor:pointer; user-select:none; }
+  #tree { font:12px/1.65 var(--f-mono); background:var(--bg-1); box-shadow:inset 0 0 0 1px var(--line-2); border-radius:10px; padding:12px 14px; overflow-x:auto; }
+  .node > .tag { cursor:pointer; user-select:none; border-radius:4px; }
   .node > .tag::before { content:"▾ "; color:var(--fg-3); }
   .node.closed > .tag::before { content:"▸ "; }
   .node.leaf > .tag::before { content:"  "; }
@@ -103,29 +166,40 @@ window.__AXMLLLM_BUILD = { axmlllm: "b187b2b", wheel: "axmlllm-0.0.1-cp313-cp313
   .tname { color:var(--brand); }
   .tline { color:var(--fg-3); }
   .attr { padding-left:22px; white-space:nowrap; }
-  .akey { color:#c7a6ff; } .aval { color:var(--fg); } .ares { color:var(--fg-3); } .atype { color:var(--info); }
+  .akey { color:#8fb8ff; } .aval { color:var(--fg); } .ares { color:var(--fg-3); } .atype { color:var(--info); }
   .aref { color:var(--good); cursor:pointer; text-decoration:underline dotted; }
   .resolved { display:block; padding-left:36px; color:var(--fg-2); white-space:pre-wrap; }
   .extra { padding-left:22px; color:var(--warn); white-space:pre-wrap; }
 
   .toolbar { display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-bottom:10px; }
-  .toolbar input, .toolbar select, .form input, .form select { background:var(--bg-2); border:1px solid var(--line-3); border-radius:6px; padding:5px 8px; }
-  .btn { background:var(--bg-3); border:1px solid var(--line-3); border-radius:6px; padding:5px 12px; cursor:pointer; }
-  .btn:hover { background:var(--bg-4); }
-  .btn.primary { border-color:var(--brand); color:var(--brand); }
-  .btn[disabled] { opacity:.4; cursor:default; }
+  .toolbar input, .toolbar select, .form input, .form select {
+    background:var(--bg-1); border:0; border-radius:8px; padding:6px 10px; font-family:var(--f-mono); font-size:12px;
+    box-shadow:inset 0 0 0 1px var(--line-2); transition:box-shadow 200ms var(--e-out), background 200ms var(--e-out);
+  }
+  .toolbar input:focus, .toolbar select:focus, .form input:focus, .form select:focus {
+    outline:none; background:var(--bg); box-shadow:inset 0 0 0 1px rgba(var(--brand-rgb),0.55), 0 0 0 3px rgba(var(--brand-rgb),0.12);
+  }
+  .btn {
+    background:linear-gradient(180deg, var(--bg-3) 0%, var(--bg-2) 100%); border:0; border-radius:8px; padding:6px 13px; cursor:pointer;
+    box-shadow:inset 0 0 0 1px var(--line-3); transition:box-shadow 160ms var(--e-out), color 160ms var(--e-out);
+  }
+  .btn:hover { color:var(--brand); box-shadow:inset 0 0 0 1px rgba(var(--brand-rgb),0.45), 0 0 0 3px rgba(var(--brand-rgb),0.08); }
+  .btn.primary { color:#fff; background:linear-gradient(180deg, rgba(var(--brand-rgb),0.55), rgba(var(--brand-rgb),0.32)); box-shadow:inset 0 0 0 1px rgba(var(--brand-rgb),0.6); }
+  .btn.primary:hover { color:#fff; box-shadow:inset 0 0 0 1px rgba(var(--brand-rgb),0.8), 0 0 0 3px rgba(var(--brand-rgb),0.15); }
+  .btn[disabled] { opacity:.4; cursor:default; box-shadow:inset 0 0 0 1px var(--line-2); color:inherit; }
 
   .form { display:grid; grid-template-columns:max-content 1fr; gap:6px 12px; align-items:center; margin:10px 0; max-width:720px; }
   .form label { color:var(--fg-2); font:12px var(--f-mono); }
   .form .req::after { content:" *"; color:var(--bad); }
   .desc { color:var(--fg-2); max-width:900px; white-space:pre-wrap; margin:6px 0; }
-  pre.json { background:var(--bg-1); border:1px solid var(--line-2); border-radius:8px; padding:10px 12px; overflow:auto; max-height:70vh; white-space:pre-wrap; word-break:break-all; }
+  pre.json { background:var(--bg-1); box-shadow:inset 0 0 0 1px var(--line-2); border-radius:10px; padding:12px 14px; overflow:auto; max-height:70vh; white-space:pre-wrap; word-break:break-all; }
 </style>
 </head>
 <body>
 <header>
-  <h1>axmlllm</h1>
+  <h1>axml<span>llm</span></h1>
   <span class="pill" id="ver"></span>
+  <span class="sub">in-browser AndroidManifest / resources.arsc analyzer · runs entirely on your device</span>
   <span id="status">starting…</span>
 </header>
 <main>
@@ -148,6 +222,8 @@ window.__AXMLLLM_BUILD = { axmlllm: "b187b2b", wheel: "axmlllm-0.0.1-cp313-cp313
     </nav>
 
     <section class="view" id="v-overview">
+      <h2>Labels <span class="muted" id="lbl-count"></span></h2>
+      <div id="labels"></div>
       <h2>Anomalies <span class="muted" id="anom-count"></span></h2>
       <div id="anoms"></div>
       <h2>Permissions <span class="muted" id="perm-count"></span></h2>
@@ -261,7 +337,8 @@ async function loadFile(file) {
       tool("list_components", { limit: 500 }), tool("manifest_anomalies", { limit: 500 }),
       tool("get_manifest_tree"),
     ]);
-    renderCards(file.name, summary);
+    const appLabel = await renderLabels(tree);
+    renderCards(file.name, summary, appLabel);
     renderAnoms(anoms);
     renderTable($("perms"), perms, ["name", "tag", "line", "device"], $("perm-count"));
     renderTable($("comps"), comps, ["name", "tag", "line", "device"], $("comp-count"));
@@ -277,11 +354,12 @@ async function loadFile(file) {
 }
 
 // ── overview ──
-function renderCards(name, s) {
+function renderCards(name, s, appLabel) {
   const cls = (v, good) => (v === good ? "ok" : v === undefined ? "" : "warn");
   const cards = [
     ["file", name, ""],
     ["package", s.package ?? "—", ""],
+    ...(appLabel ? [["label", appLabel.text, "text" + (appLabel.diverges ? " warn" : ""), appLabel.more]] : []),
     ["parse_status", s.parse_status, cls(s.parse_status, "ok")],
     ["resources", s.resources_status ?? (session.isApk ? "—" : "n/a (manifest only)"), cls(s.resources_status, "ok")],
     ["permissions", s.permission_count, ""],
@@ -291,8 +369,9 @@ function renderCards(name, s) {
   // Anything else analyze_manifest reports (dropped elements, not-judged notes…) is shown as-is.
   const known = new Set(["package", "parse_status", "resources_status", "permission_count", "component_count", "anomaly_count"]);
   for (const [k, v] of Object.entries(s)) if (!known.has(k)) cards.push([k, typeof v === "object" ? JSON.stringify(v) : v, "warn"]);
-  $("cards").innerHTML = cards.map(([k, v, c]) =>
-    `<div class="card"><div class="k">${esc(k)}</div><div class="v ${c}">${esc(v)}</div></div>`).join("");
+  $("cards").innerHTML = cards.map(([k, v, c, more]) =>
+    `<div class="card"><div class="k">${esc(k)}</div><div class="v ${c}">${esc(v)}</div>` +
+    `${more ? `<div class="more">${esc(more)}</div>` : ""}</div>`).join("");
 }
 
 function renderAnoms(out) {
@@ -310,6 +389,105 @@ function renderAnoms(out) {
     </div><div class="detail">${esc(a.detail || "")}</div>
     ${rest.length ? `<div class="muted mono">${esc(rest.map(([k, v]) => `${k}=${JSON.stringify(v)}`).join("  "))}</div>` : ""}</div>`;
   }).join("");
+}
+
+// ── labels ──
+// Every android:label in the tree, matched by ResID 0x01010001 rather than by attribute name
+// (a name-spoofed attribute is not the label the device reads), with each configuration's value
+// exactly as resource_config_variants reports it. No locale matching is done here.
+const LABEL_RESID = "0x01010001", NAME_RESID = "0x01010003";
+function collectLabels(root) {
+  const out = [];
+  const walk = (n, path) => {
+    for (const a of n.attributes || []) {
+      if (a.resid !== LABEL_RESID) continue;
+      const name = (n.attributes || []).find((x) => x.resid === NAME_RESID);
+      out.push({ path, tag: n.tag, name: name?.value, attr: a });
+    }
+    const seen = {};
+    for (const c of n.children || []) {
+      const i = seen[c.tag] = (seen[c.tag] ?? -1) + 1;
+      walk(c, `${path}/${c.tag}[${i}]`);
+    }
+  };
+  if (root) walk(root, root.tag);
+  return out;
+}
+async function variantsOf(rid) {
+  const variants = [];
+  let offset = 0, last = null;
+  for (let page = 0; page < 50 && offset != null; page++) {
+    last = await tool("resource_config_variants", { res_id: rid, offset });
+    if (last.error) return last;
+    variants.push(...(last.variants || []));
+    offset = last.next_offset;
+  }
+  return { ...last, variants, more: offset != null };
+}
+async function renderLabels(tree) {
+  const uses = collectLabels(tree.root);
+  // One group per distinct label: a resource id (resolved per configuration) or a literal string.
+  const groups = new Map();
+  for (const u of uses) {
+    const isRef = u.attr.type === "reference" && !!u.attr.raw;
+    const key = isRef ? "@" + u.attr.raw : "=" + JSON.stringify(u.attr.value);
+    if (!groups.has(key)) groups.set(key, { isRef, rid: u.attr.raw, value: u.attr.value, uses: [] });
+    groups.get(key).uses.push(u);
+  }
+  for (const g of groups.values()) if (g.isRef) g.out = await variantsOf(g.rid);
+  $("lbl-count").textContent = `(${uses.length} declared · ${groups.size} distinct)`;
+  if (!groups.size) { $("labels").innerHTML = `<div class="muted">no android:label declared</div>`; return null; }
+  $("labels").innerHTML = [...groups.values()].map(labelGroupHtml).join("");
+
+  const app = [...groups.values()].find((g) => g.uses.some((u) => u.tag === "application"));
+  if (!app) return null;
+  if (!app.isRef) return { text: String(app.value) };
+  const rows = app.out?.variants || [];
+  const def = rows.find((r) => r.config === "default") || rows[0];
+  if (!def) return { text: app.out?.error ? `@${app.rid} (unresolved)` : `@${app.rid}` };
+  const n = app.out.distinct_values ?? rows.length;
+  let shown = def.value;
+  if (def.type === "reference") {
+    // a stored @ref: show where the default-config chain ends, as resolve_resource follows it
+    const r = await tool("resolve_resource", { res_id: app.rid });
+    if (r.value != null && !r.error) shown = r.value;
+    // the chain did not end in a value (e.g. a cycle): say how it ended
+    if (r.type === "reference" && r.ref_terminal) shown += ` (ref ${r.ref_terminal})`;
+  }
+  return { text: String(shown), diverges: !!app.out.diverges,
+           more: app.out.diverges ? `${def.config} config · +${n - 1} other value${n > 2 ? "s" : ""} by config` : "" };
+}
+function labelGroupHtml(g) {
+  const usedBy = g.uses.map((u) =>
+    `<span class="path" data-path="${esc(u.path)}" title="${esc(u.path)}">&lt;${esc(u.tag)}&gt;${u.name ? " " + esc(u.name) : ""}</span>`).join(", ");
+  let badge = "", body = "";
+  if (!g.isRef) {
+    badge = `<span class="sev info">literal</span>`;
+    const v = g.value === "" ? `<span class="muted">(empty string)</span>` : esc(g.value);
+    body = `<table><tr class="def"><td class="cfg"><span class="cfgtag">any</span></td><td class="val">${v}</td><td></td></tr></table>`;
+  } else if (g.out.error) {
+    badge = `<span class="sev medium">unresolved</span>`;
+    body = `<div class="muted" style="margin-top:6px">${esc(g.out.error)}</div>`;
+  } else {
+    const o = g.out, rows = o.variants || [];
+    badge = o.diverges
+      ? `<span class="sev medium">differs by configuration · ${esc(o.distinct_values ?? "?")} values</span>`
+      : `<span class="sev ok">same in every configuration</span>`;
+    if (o.truncated || o.more) badge += ` <span class="sev high">list incomplete</span>`;
+    body = `<table><tr><th>config</th><th>value</th><th>notes</th></tr>` + rows.map((r) => {
+      const notes = [];
+      if (r.type && r.type !== "string") notes.push(`type ${r.type}`);
+      if (r.served_by && r.served_by !== r.config) notes.push(`device with this config is served ${r.served_by}`);
+      if (r.served_self === false && r.served_by === r.config) notes.push("served by another definition");
+      if (r.no_device) notes.push("no device presents this config");
+      for (const [k, v] of Object.entries(r))
+        if (!["config", "type", "value", "served_by", "served_self", "no_device"].includes(k)) notes.push(`${k}=${JSON.stringify(v)}`);
+      return `<tr class="${r.config === "default" ? "def" : ""}"><td class="cfg"><span class="cfgtag">${esc(r.config)}</span></td>` +
+        `<td class="val">${esc(r.value ?? "")}</td><td class="mono muted">${esc(notes.join(" · "))}</td></tr>`;
+    }).join("") + `</table>`;
+  }
+  return `<div class="lbl"><div class="head"><span class="rid">${g.isRef ? "@" + esc(g.rid) : "literal"}</span>${badge}` +
+    `<span class="uses">used by ${usedBy}</span></div>${body}</div>`;
 }
 
 function renderTable(table, out, cols, countEl) {
@@ -380,7 +558,7 @@ $("tree").addEventListener("click", async (e) => {
 });
 $("tree-expand").onclick = () => document.querySelectorAll("#tree .node").forEach((n) => n.classList.remove("closed"));
 $("tree-collapse").onclick = () => document.querySelectorAll("#tree .node").forEach((n, i) => i && n.classList.add("closed"));
-$("anoms").addEventListener("click", (e) => {
+const jumpToTree = (e) => {
   const p = e.target.closest(".path");
   if (!p) return;
   const node = document.querySelector(`#tree .node[data-path="${CSS.escape(p.dataset.path)}"]`);
@@ -390,7 +568,9 @@ $("anoms").addEventListener("click", (e) => {
   node.scrollIntoView({ block: "center" });
   node.classList.add("flash");
   setTimeout(() => node.classList.remove("flash"), 1500);
-});
+};
+$("anoms").addEventListener("click", jumpToTree);
+$("labels").addEventListener("click", jumpToTree);
 
 // ── resources ──
 let resQuery = null;  // { tool, args, offset }
