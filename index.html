@@ -48,8 +48,16 @@ window.__AXMLLLM_BUILD = { axmlllm: "b187b2b", wheel: "axmlllm-0.0.1-cp313-cp313
   main { padding:16px 18px 40px; max-width:1400px; margin:0 auto; }
   #drop { border:1px dashed var(--line-3); border-radius:10px; padding:22px; text-align:center; color:var(--fg-2); background:var(--bg-2); cursor:pointer; transition:background .15s; }
   #drop.over { background:var(--hl); border-color:var(--brand); }
-  #drop.disabled { opacity:.5; pointer-events:none; }
+  #drop.disabled { pointer-events:none; }
+  #drop.disabled .droptext { opacity:.5; }
   #drop b { color:var(--fg); }
+  /* Before the first file: a large drop card led by the logo. Once a file is open the
+     card collapses to the one-line strip above the results (still a drop target). */
+  #drop:not(.loaded) { display:flex; flex-direction:column; align-items:center; gap:12px; margin:6vh auto 0; width:max-content; max-width:92vw; padding:22px 28px; background:transparent; }
+  #drop.over:not(.loaded) { background:var(--hl); }
+  #droplogo { display:block; width:300px; max-width:72vw; height:auto; border-radius:10px; pointer-events:none; }
+  #drop.loaded #droplogo { display:none; }
+  @media (max-width:720px) { #droplogo { width:220px; } }
 
   #app[hidden] { display:none; }
   .cards { display:grid; grid-template-columns:repeat(auto-fill, minmax(150px, 1fr)); gap:10px; margin:16px 0; }
@@ -122,8 +130,11 @@ window.__AXMLLLM_BUILD = { axmlllm: "b187b2b", wheel: "axmlllm-0.0.1-cp313-cp313
 </header>
 <main>
   <div id="drop" class="disabled">
-    Drop an <b>APK</b> or a binary <b>AndroidManifest.xml</b> here, or click to choose.
-    <div class="muted" style="margin-top:4px">Parsed in your browser by real AOSP libandroidfw (wasm) + axmlllm — nothing is uploaded.</div>
+    <img id="droplogo" src="axmlllm_logo.png" alt="AXMLLLM">
+    <div class="droptext">
+      Drop an <b>APK</b> or a binary <b>AndroidManifest.xml</b> here, or click to choose.
+      <div class="muted" style="margin-top:4px">Parsed in your browser by real AOSP libandroidfw (wasm) + axmlllm — nothing is uploaded.</div>
+    </div>
     <input type="file" id="file" hidden>
   </div>
 
@@ -258,6 +269,7 @@ async function loadFile(file) {
     renderToolSelect(session.tools);
     resetResources();
     $("app").hidden = false;
+    drop.classList.add("loaded");
     setStatus(`${file.name} — ${Math.round(performance.now() - t0)} ms`, "ready");
   } catch (e) {
     setStatus(`${file.name}: ${e.message}`, "err");
