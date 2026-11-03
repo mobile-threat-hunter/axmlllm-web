@@ -15,7 +15,21 @@
     r.cards = [...document.querySelectorAll(".card")].map((c) => c.querySelector(".k").innerText + "=" + c.querySelector(".v").innerText);
     r.anoms = document.querySelectorAll(".anom").length;
     r.perms = document.querySelectorAll("#perms tr").length - 1;
-    r.comps = document.querySelectorAll("#comps tr").length - 1;
+    r.comps = document.querySelectorAll("#comps tr[data-kind]:not(.grp)").length;
+    // components grouped by kind: one header row per kind, rows in kind order, a chip per kind
+    const crows = [...document.querySelectorAll("#comps tr[data-kind]:not(.grp)")];
+    r.compKinds = [...document.querySelectorAll("#comps tr.grp")].map((g) => g.dataset.kind);
+    r.kindsGrouped = r.compKinds.length === new Set(crows.map((t) => t.dataset.kind)).size &&
+      crows.every((t, i) => i === 0 || t.dataset.kind === crows[i - 1].dataset.kind || !crows.slice(0, i).some((p) => p.dataset.kind === t.dataset.kind));
+    const chip = document.querySelector(`#comp-kinds button[data-kind="${r.compKinds.at(-1)}"]`);
+    if (chip) {
+      chip.click();
+      const shown = crows.filter((t) => !t.hidden);
+      r.kindFilter = shown.length > 0 && shown.every((t) => t.dataset.kind === chip.dataset.kind) &&
+        shown.length === Number(chip.querySelector("b").textContent);
+      document.querySelector('#comp-kinds button[data-kind=""]').click();
+      r.kindFilter &&= crows.every((t) => !t.hidden);
+    }
     r.treeNodes = document.querySelectorAll("#tree .node").length;
     // every anomaly path must map onto a tree node
     const paths = [...document.querySelectorAll(".anom .path")].map((p) => p.dataset.path);
@@ -23,7 +37,7 @@
     // labels: groups, per-config rows, and every "used by" link must map onto a tree node too
     // component names as the device builds them: none left package-relative (".Main")
     const ccols = [...document.querySelectorAll("#comps th")].map((t) => t.textContent);
-    const cname = (i) => [...document.querySelectorAll("#comps tr")].slice(1).map((t) => t.cells[i]?.textContent);
+    const cname = (i) => crows.map((t) => t.cells[i]?.textContent);
     r.compNames = cname(ccols.indexOf("name")).slice(0, 3);
     r.relativeNames = cname(ccols.indexOf("name")).filter((n) => n?.startsWith("."));
     r.restored = ccols.includes("declared_name") ? cname(ccols.indexOf("declared_name")).filter(Boolean).length : 0;
