@@ -46,6 +46,14 @@ def _tree():
         return json.dumps({"error": "no APK loaded"})
     return json.dumps(_fmt.sparse_tree(_m), default=str)
 
+# Class names as the device builds them (axmlllm's ParsingUtils.buildClassName replay):
+# ".Main" and "Main" get the manifest package prepended. Left as declared without a package.
+def _class_names(names_json):
+    from axmlllm.manifest.dispatch import _class_name
+    pkg = _m.package if _m is not None else None
+    return json.dumps([_class_name(pkg, n) if pkg and isinstance(n, str) and n else n
+                       for n in json.loads(names_json)])
+
 def _tool(name, args_json):
     if _m is None:
         return json.dumps({"error": "no APK loaded"})
@@ -103,6 +111,7 @@ self.onmessage = async (e) => {
       if (type === "open") result = open(e.data.name, e.data.bytes);
       else if (type === "tool") result = tool(e.data.name, e.data.args);
       else if (type === "tree") result = JSON.parse(py.globals.get("_tree")());
+      else if (type === "classnames") result = JSON.parse(py.globals.get("_class_names")(JSON.stringify(e.data.names)));
       else throw new Error(`unknown message type: ${type}`);
     }
     self.postMessage({ id, ok: true, result });

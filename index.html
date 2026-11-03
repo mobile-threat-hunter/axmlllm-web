@@ -46,6 +46,7 @@ window.__AXMLLLM_BUILD = { axmlllm: "1e32b1b", wheel: "axmlllm-0.0.1-cp313-cp313
       radial-gradient(1200px 600px at 75% -10%, rgba(var(--brand-rgb),0.06), transparent 60%),
       radial-gradient(900px 600px at 0% 100%, rgba(var(--brand-rgb),0.03), transparent 60%);
     background-attachment:fixed;
+    display:flex; flex-direction:column; min-height:100vh;
   }
   button, input, select { font:inherit; color:inherit; }
   code, pre, .mono { font-family:var(--f-mono); font-size:12px; }
@@ -76,7 +77,9 @@ window.__AXMLLLM_BUILD = { axmlllm: "1e32b1b", wheel: "axmlllm-0.0.1-cp313-cp313
   #status.err { color:var(--bad); }
   #status.err::before { background:var(--bad); box-shadow:0 0 0 3px rgba(255,94,94,0.14); }
 
-  main { padding:18px 22px 48px; max-width:1400px; margin:0 auto; }
+  main { padding:18px 22px 48px; max-width:1400px; margin:0 auto; width:100%; box-sizing:border-box; flex:1; }
+  /* Before the first file the drop card sits centred in the space under the header, as in dexllm-web. */
+  main:has(> #drop:not(.loaded)) { display:flex; flex-direction:column; justify-content:center; padding:24px 22px; }
   #drop {
     border:1px dashed var(--line-3); border-radius:12px; padding:18px; text-align:center; color:var(--fg-2);
     background:linear-gradient(180deg, var(--bg-2) 0%, var(--bg-1) 100%); cursor:pointer;
@@ -89,7 +92,7 @@ window.__AXMLLLM_BUILD = { axmlllm: "1e32b1b", wheel: "axmlllm-0.0.1-cp313-cp313
   #drop b { color:var(--fg); }
   /* Before the first file: a large drop card led by the logo. Once a file is open the
      card collapses to the one-line strip above the results (still a drop target). */
-  #drop:not(.loaded) { display:flex; flex-direction:column; align-items:center; gap:12px; margin:6vh auto 0; width:max-content; max-width:92vw; padding:22px 28px; background:transparent; }
+  #drop:not(.loaded) { display:flex; flex-direction:column; align-items:center; gap:12px; margin:0 auto; width:max-content; max-width:100%; box-sizing:border-box; padding:22px 28px; background:transparent; }
   #drop.over:not(.loaded) { background:var(--hl); }
   /* lighten: the logo's black backdrop melts into the page glow instead of showing a box */
   #droplogo { display:block; width:300px; max-width:72vw; height:auto; border-radius:10px; pointer-events:none; mix-blend-mode:lighten; }
@@ -167,10 +170,11 @@ window.__AXMLLLM_BUILD = { axmlllm: "1e32b1b", wheel: "axmlllm-0.0.1-cp313-cp313
   .tline { color:var(--fg-3); }
   .attr { padding-left:22px; white-space:nowrap; }
   .akey { color:#8fb8ff; } .aval { color:var(--fg); } .ares { color:var(--fg-3); } .atype { color:var(--info); }
+  .aclass { color:var(--good); }
   /* Obfuscated manifests use RTL / combining-mark junk in names and values; isolating each
      run keeps key=value, the type and the ResID in their real left-to-right order. */
   .attr, #tree .tag, td.mono, .lbl .val, .card .v { direction:ltr; }
-  .akey, .aval, .tname, .resolved, td.mono, .lbl .val, .card .v { unicode-bidi:isolate; }
+  .akey, .aval, .aclass, .tname, .resolved, td.mono, .lbl .val, .card .v { unicode-bidi:isolate; }
   .aref { color:var(--good); cursor:pointer; text-decoration:underline dotted; }
   .resolved { display:block; padding-left:36px; color:var(--fg-2); white-space:pre-wrap; }
   .extra { padding-left:22px; color:var(--warn); white-space:pre-wrap; }
@@ -371,11 +375,13 @@ async function loadFile(file) {
     ]);
     copyReg.clear();
     last = { tree, anoms: anoms.anomalies || [] };
+    await qualifyNames(comps, tree);
     const appLabel = await renderLabels(tree);
     renderCards(file.name, summary, appLabel);
     renderAnoms(anoms);
     renderTable($("perms"), perms, ["name", "tag", "line", "device"], $("perm-count"));
-    renderTable($("comps"), comps, ["name", "tag", "line", "device"], $("comp-count"));
+    renderTable($("comps"), comps, ["name", ...(comps.items?.some((i) => i.declared_name) ? ["declared_name"] : []),
+      "tag", "line", "device"], $("comp-count"));
     renderTree(tree);
     renderToolSelect(session.tools);
     resetResources();
@@ -472,7 +478,8 @@ function renderCards(name, s, appLabel) {
   const cards = [
     ["file", name, ""],
     ["package", s.package ?? "—", ""],
-    ...(appLabel ? [["label", appLabel.text, "text" + (appLabel.diverges ? " warn" : ""), appLabel.more]] : []),
+    appLabel ? ["label", appLabel.text, "text" + (appLabel.diverges ? " warn" : ""), appLabel.more]
+             : ["label", "none", "text muted", "no android:label on <application>"],
     ["parse_status", s.parse_status, cls(s.parse_status, "ok")],
     ["resources", s.resources_status ?? (session.isApk ? "—" : "n/a (manifest only)"), cls(s.resources_status, "ok")],
     ["permissions", s.permission_count, ""],
@@ -505,6 +512,27 @@ function renderAnoms(out) {
   }).join("");
 }
 
+// ── class names ──
+// android:name of a class-bearing element as the device builds it: ".Main" / "Main" get the
+// manifest package prepended. The rule runs in the worker (axmlllm's buildClassName replay).
+const CLASS_TAGS = new Set(["application", "activity", "activity-alias", "service", "receiver", "provider", "instrumentation"]);
+const classOf = new WeakMap();   // tree attribute → the class name the device builds from it
+async function qualifyNames(comps, tree) {
+  const attrs = [];
+  const walk = (n) => {
+    if (CLASS_TAGS.has(n.tag)) for (const a of n.attributes || [])
+      if (a.resid === NAME_RESID && typeof a.value === "string" && a.value && !/^@0x/i.test(a.value)) attrs.push(a);
+    (n.children || []).forEach(walk);
+  };
+  if (tree.root) walk(tree.root);
+  const items = comps.items || [];
+  const names = [...items.map((i) => i.name), ...attrs.map((a) => a.value)];
+  if (!names.length) return;
+  const full = await wcall({ type: "classnames", names });
+  items.forEach((i, k) => { if (full[k] !== i.name) { i.declared_name = i.name; i.name = full[k]; } });
+  attrs.forEach((a, k) => { const f = full[items.length + k]; if (f !== a.value) classOf.set(a, f); });
+}
+
 // ── labels ──
 // Every android:label in the tree, matched by ResID 0x01010001 rather than by attribute name
 // (a name-spoofed attribute is not the label the device reads), with each configuration's value
@@ -516,7 +544,7 @@ function collectLabels(root) {
     for (const a of n.attributes || []) {
       if (a.resid !== LABEL_RESID) continue;
       const name = (n.attributes || []).find((x) => x.resid === NAME_RESID);
-      out.push({ path, tag: n.tag, name: name?.value, attr: a });
+      out.push({ path, tag: n.tag, name: (name && classOf.get(name)) ?? name?.value, attr: a });
     }
     const seen = {};
     for (const c of n.children || []) {
@@ -656,6 +684,7 @@ function attrHtml(a) {
     : `<span class="aval">${esc(JSON.stringify(a.value))}</span>`;
   const rest = Object.entries(a).filter(([k]) => !["key", "value", "resid", "type", "raw"].includes(k));
   return `<div class="attr"><span class="akey">${esc(a.key)}</span>=${val}` +
+    (classOf.has(a) ? ` <span class="aclass" title="class name the device builds (package prepended)">→ ${esc(classOf.get(a))}</span>` : "") +
     (a.type ? ` <span class="atype">${esc(a.type)}</span>` : "") +
     (a.resid ? ` <span class="ares">${esc(a.resid)}</span>` : "") +
     (a.raw && a.raw !== a.value?.slice?.(1) ? ` <span class="ares">raw=${esc(a.raw)}</span>` : "") +

@@ -52,6 +52,11 @@ for (const apk of apks) {
   const tree = JSON.parse(py.globals.get("_tree")());
   if (tree.parse_status === "ok" && !tree.root) { failed++; row.push("_tree=NO ROOT"); }
   else row.push(`_tree=${JSON.stringify(tree).length}B`);
+  // the page's class-name restore (worker _class_names): ".X" / "X" get the package prepended
+  const pkg = call("analyze_manifest").package;
+  const cn = JSON.parse(py.globals.get("_class_names")(JSON.stringify([".Main", "Main", "a.b.C"])));
+  const want = pkg ? [`${pkg}.Main`, `${pkg}.Main`, "a.b.C"] : [".Main", "Main", "a.b.C"];
+  if (JSON.stringify(cn) !== JSON.stringify(want)) { failed++; row.push(`_class_names=${JSON.stringify(cn)}`); }
   console.log(row.join("  "), `tools=${opened.tools.length}`);
 }
 console.log(failed ? `FAIL: ${failed} tool error(s)` : `ok: ${apks.length} APK(s), axmlllm ${build.axmlllm}`);

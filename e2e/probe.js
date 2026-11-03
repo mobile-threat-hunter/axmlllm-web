@@ -21,6 +21,13 @@
     const paths = [...document.querySelectorAll(".anom .path")].map((p) => p.dataset.path);
     r.unmappedPaths = paths.filter((p) => !document.querySelector(`#tree .node[data-path="${CSS.escape(p)}"]`));
     // labels: groups, per-config rows, and every "used by" link must map onto a tree node too
+    // component names as the device builds them: none left package-relative (".Main")
+    const ccols = [...document.querySelectorAll("#comps th")].map((t) => t.textContent);
+    const cname = (i) => [...document.querySelectorAll("#comps tr")].slice(1).map((t) => t.cells[i]?.textContent);
+    r.compNames = cname(ccols.indexOf("name")).slice(0, 3);
+    r.relativeNames = cname(ccols.indexOf("name")).filter((n) => n?.startsWith("."));
+    r.restored = ccols.includes("declared_name") ? cname(ccols.indexOf("declared_name")).filter(Boolean).length : 0;
+    r.treeClasses = [...document.querySelectorAll("#tree .aclass")].map((a) => a.textContent).slice(0, 2);
     r.labelCard = [...document.querySelectorAll(".card")].find((c) => c.querySelector(".k").textContent === "label")?.querySelector(".v").textContent;
     r.labelGroups = document.querySelectorAll("#labels .lbl").length;
     r.labelRows = [...document.querySelectorAll("#labels .lbl tr")].filter((t) => t.querySelector("td")).map((t) => t.querySelector(".cfgtag").textContent + "=" + t.querySelector(".val").textContent);

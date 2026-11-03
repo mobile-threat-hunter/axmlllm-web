@@ -62,6 +62,9 @@ for (const apk of apks) {
   if (!r.cards?.includes("PARSE_STATUS=ok")) problems.push("parse_status not ok");
   if (r.cards?.includes("PARSE_STATUS=ok") && !r.treeNodes) problems.push("manifest tree empty");
   if (r.labelAttrsInTree !== r.labelUses) problems.push(`labels list ${r.labelUses} != label attributes in tree ${r.labelAttrsInTree}`);
+  if (r.relativeNames?.length && !r.cards?.includes("PACKAGE=—")) problems.push(`component names not restored: ${r.relativeNames.join(", ")}`);
+  if (r.restored && !r.treeClasses?.length) problems.push("restored class names not shown in the tree");
+  if (r.labelCard === undefined) problems.push("no label card");
   if (r.unmappedPaths?.length) problems.push(`anomaly paths not in tree: ${r.unmappedPaths.join(", ")}`);
   if (!r.toolOptions) problems.push("tool console empty");
   if (!r.toolOut?.startsWith("//")) problems.push("tool console did not run");
