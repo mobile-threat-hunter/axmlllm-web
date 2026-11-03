@@ -307,7 +307,9 @@ const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&l
 $("ver").textContent = `axmlllm ${BUILD.axmlllm} · Pyodide ${BUILD.pyodide}`;
 
 // ── worker RPC ──
-const worker = new Worker("worker.js?v=" + BUILD.axmlllm);
+// worker.js changes with the page, not only with the engine: key it to this page's own
+// Last-Modified too, so a cached old worker.js is never paired with a newer index.html.
+const worker = new Worker(`worker.js?v=${BUILD.axmlllm}-${Date.parse(document.lastModified) || 0}`);
 const pending = new Map();
 let nextId = 1;
 worker.onmessage = (e) => {
