@@ -48,6 +48,10 @@ for (const apk of apks) {
     if (err) { failed++; row.push(`${name}=ERROR(${err})`); }
     else row.push(`${name}=${JSON.stringify(out).length}B`);
   }
+  // the page's own whole-tree call (worker _tree) must always carry the root
+  const tree = JSON.parse(py.globals.get("_tree")());
+  if (tree.parse_status === "ok" && !tree.root) { failed++; row.push("_tree=NO ROOT"); }
+  else row.push(`_tree=${JSON.stringify(tree).length}B`);
   console.log(row.join("  "), `tools=${opened.tools.length}`);
 }
 console.log(failed ? `FAIL: ${failed} tool error(s)` : `ok: ${apks.length} APK(s), axmlllm ${build.axmlllm}`);

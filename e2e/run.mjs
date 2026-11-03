@@ -60,6 +60,8 @@ for (const apk of apks) {
   if (r.error) problems.push(r.error);
   if (!/^engine ready/.test(r.engine || "")) problems.push(`engine: ${r.engine}`);
   if (!r.cards?.includes("PARSE_STATUS=ok")) problems.push("parse_status not ok");
+  if (r.cards?.includes("PARSE_STATUS=ok") && !r.treeNodes) problems.push("manifest tree empty");
+  if (r.labelAttrsInTree !== r.labelUses) problems.push(`labels list ${r.labelUses} != label attributes in tree ${r.labelAttrsInTree}`);
   if (r.unmappedPaths?.length) problems.push(`anomaly paths not in tree: ${r.unmappedPaths.join(", ")}`);
   if (!r.toolOptions) problems.push("tool console empty");
   if (!r.toolOut?.startsWith("//")) problems.push("tool console did not run");

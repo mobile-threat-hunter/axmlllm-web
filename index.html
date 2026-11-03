@@ -167,6 +167,10 @@ window.__AXMLLLM_BUILD = { axmlllm: "b187b2b", wheel: "axmlllm-0.0.1-cp313-cp313
   .tline { color:var(--fg-3); }
   .attr { padding-left:22px; white-space:nowrap; }
   .akey { color:#8fb8ff; } .aval { color:var(--fg); } .ares { color:var(--fg-3); } .atype { color:var(--info); }
+  /* Obfuscated manifests use RTL / combining-mark junk in names and values; isolating each
+     run keeps key=value, the type and the ResID in their real left-to-right order. */
+  .attr, #tree .tag, td.mono, .lbl .val, .card .v { direction:ltr; }
+  .akey, .aval, .tname, .resolved, td.mono, .lbl .val, .card .v { unicode-bidi:isolate; }
   .aref { color:var(--good); cursor:pointer; text-decoration:underline dotted; }
   .resolved { display:block; padding-left:36px; color:var(--fg-2); white-space:pre-wrap; }
   .extra { padding-left:22px; color:var(--warn); white-space:pre-wrap; }
@@ -258,7 +262,7 @@ window.__AXMLLLM_BUILD = { axmlllm: "b187b2b", wheel: "axmlllm-0.0.1-cp313-cp313
         <button class="btn" id="tree-expand">Expand all</button>
         <button class="btn" id="tree-collapse">Collapse all</button>
         <span class="copybtn" data-fn="treeXml" title="Copy the decoded manifest as XML text (attribute names as the tree shows them)">⧉ copy XML</span>
-        <span class="copybtn" data-fn="treeJson" title="Copy get_manifest_tree's JSON">⧉ copy JSON</span>
+        <span class="copybtn" data-fn="treeJson" title="Copy the whole sparse tree (axmlllm.format.sparse_tree) as JSON">⧉ copy JSON</span>
         <span class="muted">Click an <span class="aref">@0x7f…</span> reference to resolve it through the resource table.</span>
       </div>
       <div id="tree"></div>
@@ -361,7 +365,7 @@ async function loadFile(file) {
     const [summary, perms, comps, anoms, tree] = await Promise.all([
       tool("analyze_manifest"), tool("list_permissions", { limit: 500 }),
       tool("list_components", { limit: 500 }), tool("manifest_anomalies", { limit: 500 }),
-      tool("get_manifest_tree"),
+      wcall({ type: "tree" }),   // whole tree, not the response-budgeted get_manifest_tree
     ]);
     copyReg.clear();
     last = { tree, anoms: anoms.anomalies || [] };

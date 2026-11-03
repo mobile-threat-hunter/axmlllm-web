@@ -21,6 +21,7 @@ const PY_SETUP = `
 import json, os
 import axmlllm
 from axmlllm import tools
+from axmlllm import format as _fmt
 from axmlllm.manifest import Manifest
 
 _m = None
@@ -36,6 +37,14 @@ def _open(path, is_apk):
         "version": axmlllm.__version__,
         "tools": tools.TOOL_DEFINITIONS,
     })
+
+# The whole sparse tree for the page's own views: the same axmlllm.format.sparse_tree that
+# get_manifest_tree returns, without that tool's LLM response budget (past ~128 KB the tool
+# answers one level at a time, with no root, which left the tree and labels empty).
+def _tree():
+    if _m is None:
+        return json.dumps({"error": "no APK loaded"})
+    return json.dumps(_fmt.sparse_tree(_m), default=str)
 
 def _tool(name, args_json):
     if _m is None:
@@ -93,6 +102,7 @@ self.onmessage = async (e) => {
       await initPromise;
       if (type === "open") result = open(e.data.name, e.data.bytes);
       else if (type === "tool") result = tool(e.data.name, e.data.args);
+      else if (type === "tree") result = JSON.parse(py.globals.get("_tree")());
       else throw new Error(`unknown message type: ${type}`);
     }
     self.postMessage({ id, ok: true, result });

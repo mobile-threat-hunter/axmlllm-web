@@ -26,6 +26,9 @@
     r.labelRows = [...document.querySelectorAll("#labels .lbl tr")].filter((t) => t.querySelector("td")).map((t) => t.querySelector(".cfgtag").textContent + "=" + t.querySelector(".val").textContent);
     r.labelUnresolved = [...document.querySelectorAll("#labels .sev")].filter((s) => s.textContent === "unresolved").length;
     const lpaths = [...document.querySelectorAll("#labels .path")].map((p) => p.dataset.path);
+    // every android:label the tree shows (by ResID) must appear in the Labels list
+    r.labelAttrsInTree = [...document.querySelectorAll("#tree .attr .ares")].filter((a) => a.textContent === "0x01010001").length;
+    r.labelUses = lpaths.length;
     r.unmappedPaths.push(...lpaths.filter((p) => !document.querySelector(`#tree .node[data-path="${CSS.escape(p)}"]`)));
     // resolve the first reference in the tree
     const ref = document.querySelector("#tree .aref");
@@ -81,7 +84,7 @@
       if (vbtn && v.textContent !== "(empty string)") c.labelValue = (await copyOf(vbtn)) === v.textContent;
     }
     // a copy click must not toggle the tree node it sits on
-    c.treeNotToggled = !document.querySelector("#tree .node").classList.contains("closed");
+    c.treeNotToggled = !document.querySelector("#tree .node")?.classList.contains("closed");
     r.copy = c;
   } catch (e) { r.error = String(e.stack || e); }
   return JSON.stringify(r);
