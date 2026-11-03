@@ -38,9 +38,11 @@
       r.resolved = ref.closest(".attr").querySelector(".resolved").textContent.slice(0, 200);
     }
     // resource listing + string search
+    // (an APK's table may be empty: wait for the count line, not for rows)
+    document.getElementById("res-info").textContent = "";
     document.getElementById("res-go").click();
-    await until(() => document.querySelectorAll("#res tr").length > 1, 20000);
-    r.resRows = document.querySelectorAll("#res tr").length - 1;
+    await until(() => document.getElementById("res-info").textContent.includes("total"), 20000);
+    r.resRows = document.querySelectorAll("#res tr td.mono").length ? document.querySelectorAll("#res tr").length - 1 : 0;
     r.resInfo = document.getElementById("res-info").textContent;
     document.getElementById("res-needle").value = "a";
     document.getElementById("res-search").click();

@@ -8,7 +8,7 @@
      build; worker.js's ?v=, the wheel URL and the Pyodide CDN version all
      derive from it, so the worker, wheel and runtime can never be mismatched. -->
 <script>
-window.__AXMLLLM_BUILD = { axmlllm: "b187b2b", wheel: "axmlllm-0.0.1-cp313-cp313-pyemscripten_2025_0_wasm32.whl", pyodide: "0.29.5" };
+window.__AXMLLLM_BUILD = { axmlllm: "1e32b1b", wheel: "axmlllm-0.0.1-cp313-cp313-pyemscripten_2025_0_wasm32.whl", pyodide: "0.29.5" };
 </script>
 <style>
   :root {
@@ -706,7 +706,7 @@ async function runRes(offset) {
   if (out.error) { $("res").innerHTML = `<tr><td>${esc(out.error)}</td></tr>`; return; }
   const rows = out.rows || out.items || out.hits || [];
   const cols = [...new Set(rows.flatMap((r) => Object.keys(r)))];
-  $("res").innerHTML = `<tr>${cols.map((c) => `<th>${esc(c)}</th>`).join("")}<th></th></tr>` +
+  $("res").innerHTML = !rows.length ? `<tr><td class="muted">no entries</td></tr>` : `<tr>${cols.map((c) => `<th>${esc(c)}</th>`).join("")}<th></th></tr>` +
     rows.map((r) => `<tr>${cols.map((c) => {
       const v = r[c];
       return `<td class="mono">${esc(v === undefined ? "" : typeof v === "object" ? JSON.stringify(v) : v)}</td>`;
