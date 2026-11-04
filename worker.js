@@ -54,7 +54,8 @@ def _class_names(names_json):
     return json.dumps([_class_name(pkg, n) if pkg and isinstance(n, str) and n else n
                        for n in json.loads(names_json)])
 
-# list_components for the page, plus target_activity on each <activity-alias>: the class the
+# list_components for the page, with every <application> element ahead of the components and
+# target_activity on each <activity-alias>: the class the
 # alias launches, read as the device reads it (by ResID, then buildClassName). An alias's own
 # name is only the component name launchers see; it names no class.
 def _components(limit):
@@ -71,6 +72,12 @@ def _components(limit):
             continue
         raw = non_resource_string(e, ATTR["targetActivity"])
         item["target_activity"] = _class_name(_m.package, raw) if raw and _m.package else raw
+    # every <application> element first, with what the device does with it (the dispatch's
+    # "application" effect), as list_components reports its own elements
+    if out.get("offset", 0) == 0:
+        apps = [_m._entry(e, {"application"}) for e in _m.iter() if e.tag == "application"]
+        out["items"] = apps + out.get("items", [])
+        out["total"] = out.get("total", 0) + len(apps)
     return json.dumps(out, default=str)
 
 def _tool(name, args_json):

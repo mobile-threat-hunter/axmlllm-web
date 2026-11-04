@@ -144,9 +144,9 @@ window.__AXMLLLM_BUILD = { axmlllm: "1e32b1b", wheel: "axmlllm-0.0.1-cp313-cp313
   .kinds button:hover { box-shadow:inset 0 0 0 1px color-mix(in srgb, var(--k, var(--fg-2)) 45%, transparent); }
   .kinds button.on { background:color-mix(in srgb, var(--k, var(--fg-2)) 14%, transparent); box-shadow:inset 0 0 0 1px color-mix(in srgb, var(--k, var(--fg-2)) 55%, transparent); }
   .kinds button.on b { color:var(--fg); }
-  .ktag { display:inline-block; font:600 10.5px/1.5 var(--f-ui); padding:0 8px; border-radius:999px; --k:var(--fg-3); color:var(--k);
+  .ktag { display:inline-block; white-space:nowrap; font:600 10.5px/1.5 var(--f-ui); padding:0 8px; border-radius:999px; --k:var(--fg-3); color:var(--k);
           background:color-mix(in srgb, var(--k) 10%, transparent); box-shadow:inset 0 0 0 1px color-mix(in srgb, var(--k) 40%, transparent); }
-  .k-activity { --k:var(--brand); } .k-activity-alias { --k:#e0c4ff; } .k-service { --k:var(--info); }
+  .k-application { --k:#f39ac8; } .k-activity { --k:var(--brand); } .k-activity-alias { --k:#e0c4ff; } .k-service { --k:var(--info); }
   .k-receiver { --k:var(--warn); } .k-provider { --k:var(--good); }
   #comps tr.grp td { background:var(--bg-2); color:var(--fg-2); font:600 11.5px var(--f-ui); padding:6px 12px; }
   #comps tr.grp td .muted { font-weight:500; margin-left:6px; }
@@ -399,6 +399,7 @@ async function loadFile(file) {
     renderAnoms(anoms);
     renderTable($("perms"), perms, ["name", "tag", "line", "device"], $("perm-count"));
     const has = (k) => comps.items?.some((i) => k in i);
+    last.comps = comps.items || [];
     renderComps(comps, ["name", ...(has("target_activity") ? ["target_activity"] : []),
       ...(has("declared_name") ? ["declared_name"] : []), "tag", "line", "device"]);
     renderTree(tree);
@@ -706,10 +707,16 @@ function renderTable(table, out, cols, countEl) {
 }
 
 // ── components by kind ──
-// Rows grouped activity → alias → service → receiver → provider (declaration order inside a
-// kind), each kind under a header row; the chips above filter the table to one kind.
-const COMP_KINDS = [["activity", "Activities"], ["activity-alias", "Activity aliases"], ["service", "Services"],
-                    ["receiver", "Receivers"], ["provider", "Providers"]];
+// Rows grouped <application> → activity → alias → service → receiver → provider (declaration
+// order inside a kind), each kind under a header row; the chips above filter the table to one kind.
+//
+// Embedding contract (android-llm's suite-bridge reads it; e2e checks it): the name is the first
+// cell, a td.mono when it names something; columns are found by their header text; data rows
+// carry data-kind, and data-class — the class the device instantiates (an alias's
+// target_activity) — when there is one; a tr.grp row starts each kind, so an embedder re-sorting
+// rows keeps each kind's rows between its header rows; the counts sit in the section <h2>.
+const COMP_KINDS = [["application", "Application"], ["activity", "Activities"], ["activity-alias", "Activity aliases"],
+                    ["service", "Services"], ["receiver", "Receivers"], ["provider", "Providers"]];
 const kindCls = (k) => "k-" + String(k).replace(/[^a-z-]/g, "");
 function renderComps(comps, cols) {
   const rank = (t) => { const i = COMP_KINDS.findIndex(([k]) => k === t); return i < 0 ? COMP_KINDS.length : i; };
@@ -725,8 +732,15 @@ function renderComps(comps, cols) {
   const rows = [...t.rows].slice(1);
   let prev = null;
   rows.forEach((tr, i) => {
-    const k = items[i].tag;
+    const it = items[i], k = it.tag;
     tr.dataset.kind = k;
+    const cls = k === "activity-alias" ? it.target_activity : it.name;
+    if (cls) tr.dataset.class = cls;
+    if (k === "application" && !it.name) {
+      // no android:name: the framework's own Application class runs — nothing to look up
+      tr.cells[0].className = "muted";
+      tr.cells[0].textContent = "(no android:name — android.app.Application)";
+    }
     if (tagCol >= 0) tr.cells[tagCol].innerHTML = `<span class="ktag ${kindCls(k)}">${esc(k)}</span>`;
     if (k !== prev) {
       const label = COMP_KINDS.find(([x]) => x === k)?.[1] ?? k;

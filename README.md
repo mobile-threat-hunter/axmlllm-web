@@ -25,6 +25,21 @@ Every list has a **⧉ copy** button (tab-separated tables, labels, anomalies as
 manifest as XML or JSON, tool output), and each card, row, label value, anomaly and tree
 element has its own on hover.
 
+## Embedding
+
+The [Android LLM Suite](https://github.com/mobile-threat-hunter/android-llm) console embeds
+this page in an iframe and reads it. What it may rely on (checked by `e2e/run.mjs`):
+
+- globals `engineReady`, `session.name`, `last.tree` (whole sparse tree), `last.comps`
+  (Components rows), and `loadFile(file)`
+- `#comps` / `#perms`: the name is the first cell (`td.mono` when it names something), columns
+  are found by header text (`tag`, `target_activity`, …), and the counts `#comp-count` /
+  `#perm-count` sit in the section `<h2>`
+- `#comps` rows carry `data-kind` (`application`, `activity`, `activity-alias`, `service`,
+  `receiver`, `provider`) and `data-class`, the class the device instantiates (an alias's
+  `target_activity`); a `tr.grp` header row starts each kind, so re-sorting rows inside each
+  kind keeps the grouping
+
 ## Run locally
 
 Any static server works (single-threaded, no COOP/COEP needed):

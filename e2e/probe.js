@@ -30,6 +30,20 @@
       document.querySelector('#comp-kinds button[data-kind=""]').click();
       r.kindFilter &&= crows.every((t) => !t.hidden);
     }
+    r.appRows = crows.filter((t) => t.dataset.kind === "application").map((t) => t.cells[0].textContent);
+    r.appFirst = !r.appRows.length || crows[0].dataset.kind === "application";
+    // embedding contract (android-llm suite-bridge): headers name the columns, counts sit in the
+    // section h2, every row names its kind, and every row that names a class carries data-class
+    const contract = [];
+    for (const [id, cnt] of [["comps", "comp-count"], ["perms", "perm-count"]]) {
+      const tb = document.getElementById(id);
+      const heads = [...(tb.rows[0]?.cells || [])].map((c) => c.textContent.trim());
+      if (tb.rows.length > 1 && tb.rows[1].cells[0].matches("td.mono") && !(heads[0] === "name" && heads.includes("tag"))) contract.push(`${id}: headers ${heads}`);
+      if (document.getElementById(cnt)?.parentElement?.tagName !== "H2") contract.push(`${cnt} not in an h2`);
+    }
+    if (crows.some((t) => t.cells[0].matches("td.mono") && !t.dataset.class)) contract.push("comps: row without data-class");
+    if (crows.some((t) => t.dataset.kind === "activity-alias" && t.dataset.class === t.cells[0].textContent)) contract.push("comps: alias data-class is not its target");
+    r.contract = contract;
     r.treeNodes = document.querySelectorAll("#tree .node").length;
     // every anomaly path must map onto a tree node
     const paths = [...document.querySelectorAll(".anom .path")].map((p) => p.dataset.path);
