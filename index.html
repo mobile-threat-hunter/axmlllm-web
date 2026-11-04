@@ -171,6 +171,7 @@ window.__AXMLLLM_BUILD = { axmlllm: "1e32b1b", wheel: "axmlllm-0.0.1-cp313-cp313
   .lbl td.val { font:13px var(--f-ui); color:var(--fg); word-break:break-word; }
   .lbl tr.def td.val { font-weight:600; }
   .cfgtag { font:11px var(--f-mono); color:var(--fg-2); padding:1px 7px; border-radius:6px; background:var(--bg-3); box-shadow:inset 0 0 0 1px var(--line-2); }
+  .cfgname { display:block; margin-top:3px; font:11px var(--f-ui); color:var(--fg-3); white-space:nowrap; }
   tr.def .cfgtag { color:var(--brand); box-shadow:inset 0 0 0 1px rgba(var(--brand-rgb),0.35); }
 
   /* Manifest tree */
@@ -621,6 +622,38 @@ async function renderLabels(tree) {
   return { text: String(shown), diverges: !!app.out.diverges,
            more: app.out.diverges ? `${def.config} config · +${n - 1} other value${n > 2 ? "s" : ""} by config` : "" };
 }
+// ── configuration names ──
+// The locale part of a configuration as ResTable_config::toString writes it, right after any
+// mcc/mnc ("zh-rCN", "b+sr+Latn"), named in the viewer's language by Intl.DisplayNames. For a
+// language written in more than one script the likely script is filled in (zh-CN → Simplified),
+// as the device computes it. Display only: which value a device gets is the variants' own rows.
+const langNames = (() => {
+  try { return new Intl.DisplayNames([navigator.language, "en"], { type: "language" }); } catch { return null; }
+})();
+const MULTI_SCRIPT = new Set(["zh", "sr", "uz", "az", "bs", "pa", "mn", "ks", "sd", "ha"]);
+function localeOfConfig(cfg) {
+  const t = String(cfg).split("-");
+  let i = 0;
+  while (i < t.length && /^(mcc|mnc)\d+$/.test(t[i])) i++;
+  const a = t[i] || "";
+  if (a.startsWith("b+")) return a.slice(2).split("+").join("-");
+  // "car" alone is a uiMode qualifier in that position, not a language
+  if (!/^[a-z]{2,3}$/.test(a) || a === "car") return null;
+  const r = /^r([A-Z]{2}|\d{3})$/.exec(t[i + 1] || "");
+  return r ? `${a}-${r[1]}` : a;
+}
+function configName(cfg) {
+  const tag = localeOfConfig(cfg);
+  if (!tag || !langNames) return "";
+  try {
+    let loc = new Intl.Locale(tag);
+    if (!loc.script && MULTI_SCRIPT.has(loc.language)) loc = new Intl.Locale(loc.language, { script: loc.maximize().script, region: loc.region });
+    const name = langNames.of(loc.toString());
+    return name && name !== loc.toString() ? name : "";
+  } catch { return ""; }
+}
+const cfgNameHtml = (cfg) => { const n = configName(cfg); return n ? `<span class="cfgname">${esc(n)}</span>` : ""; };
+
 function labelGroupHtml(g) {
   const usedBy = g.uses.map((u) =>
     `<span class="path" data-path="${esc(u.path)}" title="${esc(u.path)}">&lt;${esc(u.tag)}&gt;${u.name ? " " + esc(u.name) : ""}</span>`).join(", ");
@@ -647,7 +680,7 @@ function labelGroupHtml(g) {
       if (r.no_device) notes.push("no device presents this config");
       for (const [k, v] of Object.entries(r))
         if (!["config", "type", "value", "served_by", "served_self", "no_device"].includes(k)) notes.push(`${k}=${JSON.stringify(v)}`);
-      return `<tr class="${r.config === "default" ? "def" : ""}"><td class="cfg"><span class="cfgtag">${esc(r.config)}</span></td>` +
+      return `<tr class="${r.config === "default" ? "def" : ""}"><td class="cfg"><span class="cfgtag">${esc(r.config)}</span>${cfgNameHtml(r.config)}</td>` +
         `<td class="val">${esc(r.value ?? "")}</td><td class="mono muted">${esc(notes.join(" · "))}</td>` +
         `<td class="rc">${copyBtn(String(r.value ?? ""), "Copy this value")}</td></tr>`;
     }).join("") + `</table>`;
