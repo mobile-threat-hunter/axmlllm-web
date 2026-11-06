@@ -161,6 +161,24 @@ window.__AXMLLLM_BUILD = { axmlllm: "1e32b1b", wheel: "axmlllm-0.0.1-cp313-cp313
   .anom .path, .lbl .path { font:12px var(--f-mono); color:var(--brand); cursor:pointer; }
   .anom .path:hover, .lbl .path:hover { text-decoration:underline; }
   .anom .detail { color:var(--fg-2); margin-top:4px; }
+  /* anomalies grouped by kind: one collapsible group each, long groups capped until asked */
+  .agrp { margin-bottom:8px; border-radius:10px; box-shadow:inset 0 0 0 1px var(--line-2); background:var(--bg-1); }
+  .agrp > summary { list-style:none; cursor:pointer; display:flex; gap:8px; align-items:center; padding:8px 14px; border-radius:10px; }
+  .agrp > summary::-webkit-details-marker { display:none; }
+  .agrp > summary::before { content:"▸"; color:var(--fg-3); width:10px; transition:transform 160ms var(--e-out); }
+  .agrp[open] > summary::before { transform:rotate(90deg); }
+  .agrp > summary:hover { background:rgba(255,255,255,0.02); }
+  .agrp > summary .kind { font:12px var(--f-mono); color:var(--fg); }
+  .agrp > summary .n { color:var(--fg-3); font:12px var(--f-mono); }
+  .agrp .items { padding:2px 10px 6px; }
+  .agrp .anom { margin-bottom:6px; }
+  .agrp.capped .anom.over { display:none; }
+  .agrp .anom.sevhide, .agrp.sevhide { display:none; }
+  .agrp .more-btn { margin:2px 4px 6px; border:0; cursor:pointer; padding:3px 11px; border-radius:999px; font:600 11px/1.5 var(--f-ui);
+                    color:var(--fg-2); background:var(--bg-2); box-shadow:inset 0 0 0 1px var(--line-2); }
+  .agrp:not(.capped) .more-btn { display:none; }
+  .sevs { display:inline-flex; margin:0 0 0 6px; text-transform:none; letter-spacing:0; }
+  .sevs button.s-high { --k:var(--bad); } .sevs button.s-medium { --k:var(--warn); } .sevs button.s-info { --k:var(--info); }
   .device-ignored { color:var(--warn); }
 
   /* Labels */
@@ -270,7 +288,7 @@ window.__AXMLLLM_BUILD = { axmlllm: "1e32b1b", wheel: "axmlllm-0.0.1-cp313-cp313
     <section class="view" id="v-overview">
       <h2>Labels <span class="muted" id="lbl-count"></span><span class="copybtn" data-fn="labels" title="Copy every label row as tab-separated text">⧉ copy</span></h2>
       <div id="labels"></div>
-      <h2>Anomalies <span class="muted" id="anom-count"></span><span class="copybtn" data-fn="anoms" title="Copy every anomaly as JSON">⧉ copy</span></h2>
+      <h2>Anomalies <span class="muted" id="anom-count"></span><span class="kinds sevs" id="anom-sevs"></span><span class="copybtn" data-fn="anoms" title="Copy every anomaly as JSON">⧉ copy</span></h2>
       <div id="anoms"></div>
       <h2>Permissions <span class="muted" id="perm-count"></span><span class="copybtn" data-table="perms" title="Copy the table as tab-separated text">⧉ copy</span></h2>
       <div class="scroll"><table id="perms"></table></div>
@@ -515,23 +533,64 @@ function renderCards(name, s, appLabel) {
     `${more ? `<div class="more">${esc(more)}</div>` : ""}</div>`).join("");
 }
 
-function renderAnoms(out) {
-  const list = out.anomalies || [];
-  const byKind = Object.entries(out.by_kind || {}).map(([k, n]) => `${k}×${n}`).join(", ");
-  $("anom-count").textContent = `(${out.total ?? list.length})${byKind ? " — " + byKind : ""}`;
-  if (out.error) { $("anoms").innerHTML = `<div class="anom detail">${esc(out.error)}</div>`; return; }
-  if (!list.length) { $("anoms").innerHTML = `<div class="muted">none detected</div>`; return; }
-  $("anoms").innerHTML = list.map((a) => {
-    const rest = Object.entries(a).filter(([k]) => !["kind", "severity", "path", "detail", "attr"].includes(k));
-    return `<div class="anom"><div class="head">
+// Grouped by kind, groups in the order the tool ranks them (high severity first): each a
+// <details> showing its worst severity and count, open when the whole list is short. A group
+// past ANOM_CAP shows its first ANOM_CAP until "show all" (the rest stay in the DOM, so paths
+// still map onto the tree). Chips in the heading filter by severity.
+const ANOM_CAP = 20, ANOM_OPEN_MAX = 8, SEV_ORDER = ["high", "medium", "info"];
+function anomHtml(a, i) {
+  const rest = Object.entries(a).filter(([k]) => !["kind", "severity", "path", "detail", "attr"].includes(k));
+  return `<div class="anom${i >= ANOM_CAP ? " over" : ""}" data-sev="${esc(a.severity)}"><div class="head">
       <span class="sev ${esc(a.severity)}">${esc(a.severity)}</span>
       <span class="kind">${esc(a.kind)}</span>
       ${a.path ? `<span class="path" data-path="${esc(a.path)}">${esc(a.path)}${a.attr ? " @" + esc(a.attr) : ""}</span>` : ""}
       ${copyBtn(JSON.stringify(a, null, 2), "Copy this anomaly as JSON")}
     </div><div class="detail">${esc(a.detail || "")}</div>
     ${rest.length ? `<div class="muted mono">${esc(rest.map(([k, v]) => `${k}=${JSON.stringify(v)}`).join("  "))}</div>` : ""}</div>`;
-  }).join("");
 }
+function renderAnoms(out) {
+  const list = out.anomalies || [];
+  const total = out.total ?? list.length;
+  $("anom-count").textContent = `(${total}${list.length < total ? `, first ${list.length} shown` : ""})`;
+  $("anom-sevs").innerHTML = "";
+  if (out.error) { $("anoms").innerHTML = `<div class="anom detail">${esc(out.error)}</div>`; return; }
+  if (!list.length) { $("anoms").innerHTML = `<div class="muted">none detected</div>`; return; }
+  const groups = new Map();
+  for (const a of list) {
+    if (!groups.has(a.kind)) groups.set(a.kind, []);
+    groups.get(a.kind).push(a);
+  }
+  const worst = (g) => SEV_ORDER.find((v) => g.some((a) => a.severity === v)) ?? g[0].severity;
+  const open = list.length <= ANOM_OPEN_MAX;
+  $("anoms").innerHTML = [...groups].map(([kind, g]) => {
+    const all = out.by_kind?.[kind];
+    return `<details class="agrp${g.length > ANOM_CAP ? " capped" : ""}" data-kind="${esc(kind)}"${open ? " open" : ""}>` +
+      `<summary><span class="sev ${esc(worst(g))}">${esc(worst(g))}</span><span class="kind">${esc(kind)}</span>` +
+      `<span class="n">×${g.length}${all > g.length ? ` of ${all}` : ""}</span></summary>` +
+      `<div class="items">${g.map(anomHtml).join("")}` +
+      `<button class="more-btn" type="button">show all ${g.length}</button></div></details>`;
+  }).join("");
+  const count = {};
+  for (const a of list) count[a.severity] = (count[a.severity] || 0) + 1;
+  const sevs = [...SEV_ORDER.filter((v) => count[v]), ...Object.keys(count).filter((v) => !SEV_ORDER.includes(v))];
+  $("anom-sevs").innerHTML = `<button class="on" data-sev="">all<b>${list.length}</b></button>` +
+    sevs.map((v) => `<button class="s-${esc(v)}" data-sev="${esc(v)}">${esc(v)}<b>${count[v]}</b></button>`).join("");
+}
+$("anoms").addEventListener("click", (e) => {
+  const b = e.target.closest(".more-btn");
+  if (b) b.closest(".agrp").classList.remove("capped");
+});
+$("anom-sevs").addEventListener("click", (e) => {
+  const b = e.target.closest("button");
+  if (!b) return;
+  for (const x of $("anom-sevs").children) x.classList.toggle("on", x === b);
+  const v = b.dataset.sev;
+  for (const g of $("anoms").querySelectorAll(".agrp")) {
+    let shown = 0;
+    for (const a of g.querySelectorAll(".anom")) { const hide = !!v && a.dataset.sev !== v; a.classList.toggle("sevhide", hide); shown += !hide; }
+    g.classList.toggle("sevhide", !shown);
+  }
+});
 
 // ── class names ──
 // android:name of a class-bearing element as the device builds it: ".Main" / "Main" get the

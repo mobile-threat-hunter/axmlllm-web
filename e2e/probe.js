@@ -126,6 +126,28 @@
     // a copy click must not toggle the tree node it sits on
     c.treeNotToggled = !document.querySelector("#tree .node")?.classList.contains("closed");
     r.copy = c;
+    // a long anomaly list stays short: synthetic 60 findings over 3 kinds, then the real ones back
+    const fake = [...Array(45)].map((_, i) => ({ kind: "k_high", severity: "high", detail: "d" + i }))
+      .concat([...Array(10)].map((_, i) => ({ kind: "k_med", severity: "medium", detail: "m" + i })))
+      .concat([...Array(5)].map((_, i) => ({ kind: "k_info", severity: "info", detail: "i" + i })));
+    renderAnoms({ anomalies: fake, total: 60, by_kind: { k_high: 45, k_med: 10, k_info: 5 } });
+    const vis = (el) => el.getClientRects().length > 0;
+    const grp = (k) => document.querySelector(`#anoms .agrp[data-kind="${k}"]`);
+    const L = {};
+    L.groups = document.querySelectorAll("#anoms .agrp").length === 3;
+    L.collapsed = [...document.querySelectorAll("#anoms .agrp")].every((g) => !g.open);
+    L.collapsedHeight = document.getElementById("anoms").offsetHeight < 200;
+    grp("k_high").open = true;
+    L.capped = [...grp("k_high").querySelectorAll(".anom")].filter(vis).length === 20;
+    grp("k_high").querySelector(".more-btn").click();
+    L.showAll = [...grp("k_high").querySelectorAll(".anom")].filter(vis).length === 45;
+    document.querySelector('#anom-sevs button[data-sev="medium"]').click();
+    L.sevFilter = !vis(grp("k_high")) && vis(grp("k_med")) && !vis(grp("k_info"));
+    document.querySelector('#anom-sevs button[data-sev=""]').click();
+    L.sevAll = vis(grp("k_high")) && vis(grp("k_info"));
+    renderAnoms(await tool("manifest_anomalies", { limit: 500 }));
+    L.restored = document.querySelectorAll(".anom").length === r.anoms;
+    r.longAnoms = L;
   } catch (e) { r.error = String(e.stack || e); }
   return JSON.stringify(r);
 })()

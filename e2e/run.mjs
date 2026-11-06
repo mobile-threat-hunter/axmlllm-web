@@ -68,6 +68,9 @@ for (const apk of apks) {
   if (r.aliasTargets?.some((x) => x === null || x.startsWith("."))) problems.push(`alias target missing or package-relative: ${JSON.stringify(r.aliasTargets)}`);
   if (!r.appFirst) problems.push("<application> row not first in Components");
   if (r.contract?.length) problems.push(`embedding contract broken: ${r.contract.join("; ")}`);
+  const badLong = Object.entries(r.longAnoms || {}).filter(([, ok]) => !ok).map(([k]) => k);
+  if (!r.longAnoms) problems.push("long anomaly list not checked");
+  else if (badLong.length) problems.push(`long anomaly list: ${badLong.join(", ")}`);
   if (r.labelCard === undefined) problems.push("no label card");
   if (r.unmappedPaths?.length) problems.push(`anomaly paths not in tree: ${r.unmappedPaths.join(", ")}`);
   if (!r.toolOptions) problems.push("tool console empty");
