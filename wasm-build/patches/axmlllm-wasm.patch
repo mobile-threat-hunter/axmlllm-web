@@ -1,5 +1,5 @@
 diff --git a/CMakeLists.txt b/CMakeLists.txt
-index 6e715c3..755194c 100644
+index 8bd28bb..1d5457b 100644
 --- a/CMakeLists.txt
 +++ b/CMakeLists.txt
 @@ -20,7 +20,12 @@ set(EXT "${AOSP_ROOT}/external")
@@ -48,7 +48,7 @@ index 6e715c3..755194c 100644
  add_library(androidfw_static STATIC
    ${ANDROIDFW_SRCS} ${LIBUTILS_BINDER_SRCS} ${LIBUTILS_SRCS}
    ${LIBBASE_SRCS} ${LIBZIPARCHIVE_SRCS} ${LIBLOG_SRCS} ${LIBCUTILS_SRCS}
-@@ -143,26 +173,49 @@ target_compile_definitions(androidfw_static PUBLIC STATIC_ANDROIDFW_FOR_TOOLS ZL
+@@ -143,21 +173,39 @@ target_compile_definitions(androidfw_static PUBLIC STATIC_ANDROIDFW_FOR_TOOLS ZL
  # liblog event-tag ids (system/logging/liblog Android.bp cflags).
  target_compile_definitions(androidfw_static PRIVATE
    LIBLOG_LOG_TAG=1006 SNET_EVENT_LOG_TAG=1397638484 ANDROID_DEBUGGABLE=0)
@@ -96,6 +96,8 @@ index 6e715c3..755194c 100644
 +  endif()
  endif()
  
+ # ── engine independence check (#22) ──────────────────────────────────────────
+@@ -171,6 +219,11 @@ target_link_libraries(axml_engine_check PRIVATE androidfw_static)
  # ── pybind11 module (_axml_core) ─────────────────────────────────────────────
  # Built under scikit-build (wheel) and also standalone when pybind11 is importable
  # (fast dev iteration: `cmake -S . -B build/dev && cmake --build build/dev`).
@@ -106,16 +108,16 @@ index 6e715c3..755194c 100644
 +set(PYBIND11_FINDPYTHON ON)
  find_package(pybind11 CONFIG QUIET)
  if(pybind11_FOUND)
-   pybind11_add_module(_axml_core native/androidfw_binding/module.cpp)
-@@ -170,8 +223,15 @@ if(pybind11_FOUND)
-   # The host-refusal witness (module.cpp, HOST REFUSALS): every call through which AOSP's loader
+   pybind11_add_module(_axml_core native/python/binding.cpp)
+@@ -180,8 +233,15 @@ if(pybind11_FOUND)
+   # The host-refusal witness (native/core/engine.h, HOST REFUSALS): every call through which AOSP's loader
    # takes memory or a descriptor goes through a wrapper. tests/test_harnesses.py checks this list
    # against the module's own undefined symbols, so a new such import cannot go unwitnessed.
 -  set(AXML_WITNESSED malloc calloc realloc aligned_alloc strdup mmap mmap64 open open64 dup fopen
 -      fopen64 fdopen inflateInit2_ inflate)
 +  if(EMSCRIPTEN)
 +    # musl has no LFS64 symbols: mmap64/open64/fopen64 are #defines onto the
-+    # plain names (module.cpp guards their wrappers out the same way).
++    # plain names (engine.h guards their wrappers out the same way).
 +    set(AXML_WITNESSED malloc calloc realloc aligned_alloc strdup mmap open dup fopen
 +        fdopen inflateInit2_ inflate)
 +  else()
@@ -125,7 +127,7 @@ index 6e715c3..755194c 100644
    # Each wrapped call is not the libc builtin the compiler knows: as a builtin, malloc is taken to
    # touch no memory of ours, and the witness's reads around a direct call were folded to the values
    # stored before it (measured) — the wrapper writes that memory.
-@@ -183,7 +243,11 @@ if(pybind11_FOUND)
+@@ -193,7 +253,11 @@ if(pybind11_FOUND)
    # the exception machinery were interposed by any libstdc++ already in the process's global scope
    # (an embedding host, LD_PRELOAD) — measured: a failed load's exception then aborted the process,
    # and AOSP's allocations went past the witnessed malloc.
@@ -138,82 +140,6 @@ index 6e715c3..755194c 100644
    if(DEFINED SKBUILD)
      install(TARGETS _axml_core DESTINATION axmlllm)
    endif()
-diff --git a/native/androidfw_binding/module.cpp b/native/androidfw_binding/module.cpp
-index 40292af..2cb2aac 100644
---- a/native/androidfw_binding/module.cpp
-+++ b/native/androidfw_binding/module.cpp
-@@ -160,6 +160,7 @@ void* __wrap_mmap(void* a, size_t n, int prot, int flags, int fd, off_t off) {
-   if (p == MAP_FAILED && host_errno(errno)) witness_refusal("mmap", errno, n);
-   return p;
- }
-+#ifndef __EMSCRIPTEN__  // musl/emscripten has no LFS64 symbols (mmap64 is a #define)
- void* __real_mmap64(void*, size_t, int, int, int, off64_t);
- void* __wrap_mmap64(void* a, size_t n, int prot, int flags, int fd, off64_t off) {
-   witness_hit(kMmap64);
-@@ -167,6 +168,7 @@ void* __wrap_mmap64(void* a, size_t n, int prot, int flags, int fd, off64_t off)
-   if (p == MAP_FAILED && host_errno(errno)) witness_refusal("mmap", errno, n);
-   return p;
- }
-+#endif
- // Opening a file inside Load: ANY failure is the host's — the loader never reached the bytes
- // (a file removed or made unreadable after the lookup, a descriptor table full). A file REPLACED
- // by one that opens is judged on what was loaded: in-process, the path is read twice;
-@@ -189,6 +191,7 @@ int __wrap_open(const char* path, int flags, ...) {
- }
- // The 64-bit-offset spellings: Python.h sets _FILE_OFFSET_BITS=64, so this file's own calls bind to
- // them, while AOSP's static library binds the plain ones — both are wrapped.
-+#ifndef __EMSCRIPTEN__  // musl/emscripten: open64/fopen64 are #defines, not symbols
- int __real_open64(const char*, int, ...);
- int __wrap_open64(const char* path, int flags, ...) {
-   witness_hit(kOpen64);
-@@ -210,6 +213,7 @@ FILE* __wrap_fopen64(const char* path, const char* mode) {
-   if (f == nullptr) witness_refusal("fopen", errno, 0);
-   return f;
- }
-+#endif  // !__EMSCRIPTEN__
- int __real_dup(int);
- int __wrap_dup(int fd) {
-   witness_hit(kDup);
-@@ -289,7 +293,11 @@ class ScopedWitness {
- // this file's own calls to the 64-bit spellings): the link wraps both.
- extern "C" int plain_open(const char*, int, ...) __asm__("open");
- extern "C" FILE* plain_fopen(const char*, const char*) __asm__("fopen");
-+#ifdef __EMSCRIPTEN__
-+extern "C" void* plain_mmap(void*, size_t, int, int, int, off_t) __asm__("mmap");
-+#else
- extern "C" void* plain_mmap(void*, size_t, int, int, int, long) __asm__("mmap");
-+#endif
- // zlib's own allocator, refusing from the Nth call on: Z_MEM_ERROR deterministically, from
- // inflateInit2 (its state) or from inflate (its window, allocated on the first call that needs it).
- struct RefuseFrom {
-@@ -4945,7 +4953,27 @@ class ArscResolver {
- 
- }  // namespace
- 
-+#ifdef __EMSCRIPTEN__
-+// liblog's host stderr logger calls its GetThreadId(), which has no branch for
-+// emscripten (no __BIONIC__/__APPLE__/__linux__/_WIN32) — a missing return the
-+// optimizer lowers to `unreachable`, so the FIRST AOSP log line traps the wasm
-+// module. Install the same format minus the tid before any AOSP code can log.
-+static void emscripten_stderr_logger(const struct __android_log_message* m) {
-+  static const char log_characters[] = "XXVDIWEF";
-+  int32_t priority = m->priority > ANDROID_LOG_SILENT ? ANDROID_LOG_FATAL : m->priority;
-+  char priority_char = log_characters[priority];
-+  const char* tag = m->tag ? m->tag : " nullptr";
-+  if (m->file != nullptr)
-+    fprintf(stderr, "%c %-8s: %s:%u %s\n", priority_char, tag, m->file, m->line, m->message);
-+  else
-+    fprintf(stderr, "%c %-8s: %s\n", priority_char, tag, m->message);
-+}
-+#endif
-+
- PYBIND11_MODULE(_axml_core, m) {
-+#ifdef __EMSCRIPTEN__
-+  __android_log_set_logger(emscripten_stderr_logger);
-+#endif
-   m.doc() = "axmlllm native core — real AOSP libandroidfw (ResXMLTree) AXML parser";
-   // The page bounds, exported so a test can assert the MAGNITUDE and not merely the existence —
-   // review moved kMaxPageRows 12x and kMaxValueBytes 32x with the suite green.
 diff --git a/native/aosp_shim/include-wasm/sys/cdefs.h b/native/aosp_shim/include-wasm/sys/cdefs.h
 new file mode 100644
 index 0000000..76684dc
@@ -239,6 +165,86 @@ index 0000000..76684dc
 +#ifndef __STRING
 +#define __STRING(x) #x
 +#endif
+diff --git a/native/core/engine.h b/native/core/engine.h
+index f053d14..11ee4f4 100644
+--- a/native/core/engine.h
++++ b/native/core/engine.h
+@@ -178,6 +178,7 @@ void* __wrap_mmap(void* a, size_t n, int prot, int flags, int fd, off_t off) {
+   if (p == MAP_FAILED && host_errno(errno)) witness_refusal("mmap", errno, n);
+   return p;
+ }
++#ifndef __EMSCRIPTEN__  // musl/emscripten has no LFS64 symbols (mmap64 is a #define)
+ void* __real_mmap64(void*, size_t, int, int, int, off64_t);
+ void* __wrap_mmap64(void* a, size_t n, int prot, int flags, int fd, off64_t off) {
+   witness_hit(kMmap64);
+@@ -185,6 +186,7 @@ void* __wrap_mmap64(void* a, size_t n, int prot, int flags, int fd, off64_t off)
+   if (p == MAP_FAILED && host_errno(errno)) witness_refusal("mmap", errno, n);
+   return p;
+ }
++#endif
+ // Opening a file inside Load: ANY failure is the host's — the loader never reached the bytes
+ // (a file removed or made unreadable after the lookup, a descriptor table full). A file REPLACED
+ // by one that opens is judged on what was loaded: in-process, the path is read twice;
+@@ -207,6 +209,7 @@ int __wrap_open(const char* path, int flags, ...) {
+ }
+ // The 64-bit-offset spellings: this file requires _FILE_OFFSET_BITS=64 (top), so its own calls bind
+ // to them, while AOSP's static library binds the plain ones — both are wrapped.
++#ifndef __EMSCRIPTEN__  // musl/emscripten: open64/fopen64 are #defines, not symbols
+ int __real_open64(const char*, int, ...);
+ int __wrap_open64(const char* path, int flags, ...) {
+   witness_hit(kOpen64);
+@@ -228,6 +231,7 @@ FILE* __wrap_fopen64(const char* path, const char* mode) {
+   if (f == nullptr) witness_refusal("fopen", errno, 0);
+   return f;
+ }
++#endif  // !__EMSCRIPTEN__
+ int __real_dup(int);
+ int __wrap_dup(int fd) {
+   witness_hit(kDup);
+@@ -308,7 +312,11 @@ class ScopedWitness {
+ // its own calls to the 64-bit spellings): the link wraps both.
+ extern "C" int plain_open(const char*, int, ...) __asm__("open");
+ extern "C" FILE* plain_fopen(const char*, const char*) __asm__("fopen");
++#ifdef __EMSCRIPTEN__
++extern "C" void* plain_mmap(void*, size_t, int, int, int, off_t) __asm__("mmap");
++#else
+ extern "C" void* plain_mmap(void*, size_t, int, int, int, long) __asm__("mmap");
++#endif
+ // zlib's own allocator, refusing from the Nth call on: Z_MEM_ERROR deterministically, from
+ // inflateInit2 (its state) or from inflate (its window, allocated on the first call that needs it).
+ struct RefuseFrom {
+diff --git a/native/python/binding.cpp b/native/python/binding.cpp
+index 9f733c4..79393ce 100644
+--- a/native/python/binding.cpp
++++ b/native/python/binding.cpp
+@@ -155,7 +155,27 @@ template <> struct type_caster<axv::bytes> {
+ 
+ }  // namespace pybind11::detail
+ 
++#ifdef __EMSCRIPTEN__
++// liblog's host stderr logger calls its GetThreadId(), which has no branch for
++// emscripten (no __BIONIC__/__APPLE__/__linux__/_WIN32) — a missing return the
++// optimizer lowers to `unreachable`, so the FIRST AOSP log line traps the wasm
++// module. Install the same format minus the tid before any AOSP code can log.
++static void emscripten_stderr_logger(const struct __android_log_message* m) {
++  static const char log_characters[] = "XXVDIWEF";
++  int32_t priority = m->priority > ANDROID_LOG_SILENT ? ANDROID_LOG_FATAL : m->priority;
++  char priority_char = log_characters[priority];
++  const char* tag = m->tag ? m->tag : " nullptr";
++  if (m->file != nullptr)
++    fprintf(stderr, "%c %-8s: %s:%u %s\n", priority_char, tag, m->file, m->line, m->message);
++  else
++    fprintf(stderr, "%c %-8s: %s\n", priority_char, tag, m->message);
++}
++#endif
++
+ PYBIND11_MODULE(_axml_core, m) {
++#ifdef __EMSCRIPTEN__
++  __android_log_set_logger(emscripten_stderr_logger);
++#endif
+   m.doc() = "axmlllm native core — real AOSP libandroidfw (ResXMLTree) AXML parser";
+   axv::process_backend() = &g_python;  // the engine's answers are Python objects
+   // The page bounds, exported so a test can assert the MAGNITUDE and not merely the existence —
 diff --git a/pyproject.toml b/pyproject.toml
 index 448dc5c..99c1c5e 100644
 --- a/pyproject.toml

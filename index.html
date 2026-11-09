@@ -8,7 +8,7 @@
      build; worker.js's ?v=, the wheel URL and the Pyodide CDN version all
      derive from it, so the worker, wheel and runtime can never be mismatched. -->
 <script>
-window.__AXMLLLM_BUILD = { axmlllm: "1e32b1b", wheel: "axmlllm-0.0.1-cp313-cp313-pyemscripten_2025_0_wasm32.whl", pyodide: "0.29.5" };
+window.__AXMLLLM_BUILD = { axmlllm: "751a1ef", wheel: "axmlllm-0.0.1-cp313-cp313-pyemscripten_2025_0_wasm32.whl", pyodide: "0.29.5" };
 </script>
 <style>
   :root {
@@ -795,6 +795,11 @@ function renderComps(comps, cols) {
     tr.dataset.kind = k;
     const cls = k === "activity-alias" ? it.target_activity : it.name;
     if (cls) tr.dataset.class = cls;
+    if (k === "activity-alias" && it.target_activity_why) {
+      // no one class: the device's state decides it, or its parse throws reading it
+      const c = tr.cells[[...t.rows[0].cells].findIndex((h) => h.textContent === "target_activity")];
+      if (c) { c.className = "muted"; c.textContent = `(unknown: ${it.target_activity_why})`; }
+    }
     if (k === "application" && !it.name) {
       // no android:name: the framework's own Application class runs — nothing to look up
       tr.cells[0].className = "muted";

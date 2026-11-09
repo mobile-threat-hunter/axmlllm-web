@@ -71,6 +71,11 @@ def _components(limit):
         if e.tag != "activity-alias" or item.get("tag") != e.tag or item.get("line") != e.line:
             continue
         raw = non_resource_string(e, ATTR["targetActivity"])
+        if raw is not None and not isinstance(raw, str):
+            # Unresolved / Throws: no class to name — the device decides it, or its parse fails
+            item["target_activity"] = None
+            item["target_activity_why"] = getattr(raw, "why", str(raw))
+            continue
         item["target_activity"] = _class_name(_m.package, raw) if raw and _m.package else raw
     # every <application> element first, with what the device does with it (the dispatch's
     # "application" effect), as list_components reports its own elements
