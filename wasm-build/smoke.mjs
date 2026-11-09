@@ -57,10 +57,14 @@ for (const apk of apks) {
   const cn = JSON.parse(py.globals.get("_class_names")(JSON.stringify([".Main", "Main", "a.b.C"])));
   const want = pkg ? [`${pkg}.Main`, `${pkg}.Main`, "a.b.C"] : [".Main", "Main", "a.b.C"];
   if (JSON.stringify(cn) !== JSON.stringify(want)) { failed++; row.push(`_class_names=${JSON.stringify(cn)}`); }
-  // the page's component list (worker _components): every <activity-alias> carries target_activity
+  // the page's component list (worker _components): every <activity-alias> carries target_activity —
+  // a class name string, or null (absent attribute, or with target_activity_why when the device decides)
   const comps = JSON.parse(py.globals.get("_components")(500));
   const aliases = (comps.items || []).filter((i) => i.tag === "activity-alias");
-  if (comps.error || aliases.some((i) => !("target_activity" in i))) { failed++; row.push("_components=NO TARGET"); }
+  const badTarget = (i) => !("target_activity" in i) ||
+    (i.target_activity !== null && typeof i.target_activity !== "string") ||
+    (i.target_activity_why !== undefined && (i.target_activity !== null || typeof i.target_activity_why !== "string"));
+  if (comps.error || aliases.some(badTarget)) { failed++; row.push("_components=BAD TARGET"); }
   else row.push(`aliases=${aliases.length}`);
   console.log(row.join("  "), `tools=${opened.tools.length}`);
 }

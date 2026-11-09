@@ -43,6 +43,20 @@
     }
     if (crows.some((t) => t.cells[0].matches("td.mono") && !t.dataset.class)) contract.push("comps: row without data-class");
     if (crows.some((t) => t.dataset.kind === "activity-alias" && t.dataset.class === t.cells[0].textContent)) contract.push("comps: alias data-class is not its target");
+    // an alias whose targetActivity the device decides: "(unknown: …)" in its cell, no data-class,
+    // no column of its own — synthetic rows, then the real ones back
+    const realCols = [...document.querySelectorAll("#comps tr:first-child th")].map((h) => h.textContent).filter(Boolean);
+    const realCount = document.getElementById("comp-count").textContent;
+    renderComps({ items: [{ name: "a.B", tag: "activity-alias", line: 1, target_activity: null, target_activity_why: "w" }], total: 1 },
+      ["name", "target_activity", "tag", "line"]);
+    const urow = document.querySelector("#comps tr[data-kind='activity-alias']:not(.grp)");
+    const uheads = [...document.querySelectorAll("#comps tr:first-child th")].map((h) => h.textContent);
+    if (urow?.cells[uheads.indexOf("target_activity")]?.textContent !== "(unknown: w)") contract.push("comps: unknown target not shown");
+    if (urow?.dataset.class) contract.push("comps: unknown target has data-class");
+    if (uheads.includes("target_activity_why")) contract.push("comps: target_activity_why is a column");
+    renderComps({ items: last.comps, total: Number(realCount.replace(/\D/g, "")) }, realCols);
+    if (document.querySelectorAll("#comps tr[data-kind]:not(.grp)").length !== r.comps ||
+        document.getElementById("comp-count").textContent !== realCount) contract.push("comps: not restored");
     r.contract = contract;
     r.treeNodes = document.querySelectorAll("#tree .node").length;
     // every anomaly path must map onto a tree node

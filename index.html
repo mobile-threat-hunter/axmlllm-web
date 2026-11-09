@@ -749,12 +749,14 @@ function labelGroupHtml(g) {
     `<span class="uses">used by ${usedBy}</span>${copyBtn(labelRowsTsv([g]), "Copy this label's rows")}</div>${body}</div>`;
 }
 
+// Keys a renderer shows inside another column's cell, never as a column of their own.
+const ROW_NOTES = new Set(["target_activity_why"]);
 function renderTable(table, out, cols, countEl) {
   const items = out.items || [];
   if (countEl) countEl.textContent = `(${out.total ?? items.length})`;
   if (out.error) { table.innerHTML = `<tr><td>${esc(out.error)}</td></tr>`; return; }
   if (!items.length) { table.innerHTML = `<tr><td class="muted">none declared</td></tr>`; return; }
-  const extra = [...new Set(items.flatMap((i) => Object.keys(i)))].filter((k) => !cols.includes(k));
+  const extra = [...new Set(items.flatMap((i) => Object.keys(i)))].filter((k) => !cols.includes(k) && !ROW_NOTES.has(k));
   const all = cols.concat(extra);
   table.innerHTML = `<tr>${all.map((c) => `<th>${esc(c)}</th>`).join("")}<th></th></tr>` +
     items.map((i) => `<tr>${all.map((c) => {
