@@ -15,18 +15,18 @@ window.__AXMLLLM_BUILD = { axmlllm: "751a1ef", wheel: "axmlllm-0.0.1-cp313-cp313
     /* dexllm-web's surface system (pure black, layered off-blacks, rgba lines), with the
        brand taken from the axmlllm logo's violet instead of dexllm's blue. */
     --bg:#000000;
-    --bg-1:#05040a;
-    --bg-2:#0a0810;
-    --bg-3:#100d17;
-    --bg-4:#17131f;
+    --bg-1:#04050a;
+    --bg-2:#08090f;
+    --bg-3:#0d0f16;
+    --bg-4:#13161f;
     --line-1:rgba(255,255,255,0.05);
     --line-2:rgba(255,255,255,0.09);
     --line-3:rgba(255,255,255,0.14);
-    --fg:#ebe7f2;
-    --fg-2:#bdb6c9;
-    --fg-3:#767082;
-    --brand:#b48cff;
-    --brand-rgb:180,140,255;
+    --fg:#e6e9f0;
+    --fg-2:#b6bbc7;
+    --fg-3:#6f7480;
+    --brand:#6ba1ff;
+    --brand-rgb:107,161,255;
     --brand-soft:rgba(var(--brand-rgb),0.10);
     --good:#5fdca0;
     --warn:#f5b441;
@@ -59,7 +59,7 @@ window.__AXMLLLM_BUILD = { axmlllm: "751a1ef", wheel: "axmlllm-0.0.1-cp313-cp313
   header {
     position:sticky; top:0; z-index:10;
     display:flex; align-items:center; gap:14px; padding:12px 22px; flex-wrap:wrap;
-    background:linear-gradient(180deg, rgba(16,13,23,0.85) 0%, rgba(10,8,16,0.85) 100%);
+    background:linear-gradient(180deg, rgba(13,15,22,0.85) 0%, rgba(8,9,15,0.85) 100%);
     backdrop-filter:blur(14px) saturate(140%); -webkit-backdrop-filter:blur(14px) saturate(140%);
     box-shadow:inset 0 -1px 0 var(--line-1), inset 0 1px 0 rgba(255,255,255,0.03), 0 1px 0 rgba(0,0,0,0.8);
   }
@@ -133,6 +133,9 @@ window.__AXMLLLM_BUILD = { axmlllm: "751a1ef", wheel: "axmlllm-0.0.1-cp313-cp313
   th { color:var(--fg-3); font-weight:600; font-size:10.5px; text-transform:uppercase; letter-spacing:.06em; position:sticky; top:0; background:var(--bg-2); }
   td.mono { font-family:var(--f-mono); font-size:12px; word-break:break-all; }
   .muted { color:var(--fg-3); }
+  /* Overview sections: a long list scrolls inside its own box (wheel) instead of stretching the page */
+  .vcap { max-height:min(60vh, 560px); overflow-y:auto; }
+  #labels.vcap, #anoms.vcap { padding-right:4px; }
 
   /* component kinds: filter chips over the table, a coloured tag per row, a header row per kind */
   .kinds { display:flex; gap:6px; flex-wrap:wrap; margin:0 0 8px; }
@@ -146,7 +149,7 @@ window.__AXMLLLM_BUILD = { axmlllm: "751a1ef", wheel: "axmlllm-0.0.1-cp313-cp313
   .kinds button.on b { color:var(--fg); }
   .ktag { display:inline-block; white-space:nowrap; font:600 10.5px/1.5 var(--f-ui); padding:0 8px; border-radius:999px; --k:var(--fg-3); color:var(--k);
           background:color-mix(in srgb, var(--k) 10%, transparent); box-shadow:inset 0 0 0 1px color-mix(in srgb, var(--k) 40%, transparent); }
-  .k-application { --k:#f39ac8; } .k-activity { --k:var(--brand); } .k-activity-alias { --k:#e0c4ff; } .k-service { --k:var(--info); }
+  .k-application { --k:#f39ac8; } .k-activity { --k:var(--brand); } .k-activity-alias { --k:#c8a8ff; } .k-service { --k:var(--info); }
   .k-receiver { --k:var(--warn); } .k-provider { --k:var(--good); }
   #comps tr.grp td { background:var(--bg-2); color:var(--fg-2); font:600 11.5px var(--f-ui); padding:6px 12px; }
   #comps tr.grp td .muted { font-weight:500; margin-left:6px; }
@@ -287,14 +290,14 @@ window.__AXMLLLM_BUILD = { axmlllm: "751a1ef", wheel: "axmlllm-0.0.1-cp313-cp313
 
     <section class="view" id="v-overview">
       <h2>Labels <span class="muted" id="lbl-count"></span><span class="copybtn" data-fn="labels" title="Copy every label row as tab-separated text">⧉ copy</span></h2>
-      <div id="labels"></div>
+      <div class="vcap" id="labels"></div>
       <h2>Anomalies <span class="muted" id="anom-count"></span><span class="kinds sevs" id="anom-sevs"></span><span class="copybtn" data-fn="anoms" title="Copy every anomaly as JSON">⧉ copy</span></h2>
-      <div id="anoms"></div>
+      <div class="vcap" id="anoms"></div>
       <h2>Permissions <span class="muted" id="perm-count"></span><span class="copybtn" data-table="perms" title="Copy the table as tab-separated text">⧉ copy</span></h2>
-      <div class="scroll"><table id="perms"></table></div>
+      <div class="scroll vcap"><table id="perms"></table></div>
       <h2>Components <span class="muted" id="comp-count"></span><span class="copybtn" data-table="comps" title="Copy the table as tab-separated text">⧉ copy</span></h2>
       <div class="kinds" id="comp-kinds"></div>
-      <div class="scroll"><table id="comps"></table></div>
+      <div class="scroll vcap"><table id="comps"></table></div>
     </section>
 
     <section class="view" id="v-manifest" hidden>

@@ -155,6 +155,13 @@
     L.capped = [...grp("k_high").querySelectorAll(".anom")].filter(vis).length === 20;
     grp("k_high").querySelector(".more-btn").click();
     L.showAll = [...grp("k_high").querySelectorAll(".anom")].filter(vis).length === 45;
+    // 45 open findings stay inside their own wheel-scrolled box, as every overview section does
+    const box = document.getElementById("anoms");
+    L.boxScrolls = box.clientHeight <= Math.min(innerHeight * 0.6, 560) + 1 && box.scrollHeight > box.clientHeight;
+    L.sectionsCap = ["labels", "anoms", "perms", "comps"].every((id) => {
+      const el = document.getElementById(id).closest(".vcap");
+      return el && getComputedStyle(el).overflowY === "auto" && getComputedStyle(el).maxHeight !== "none";
+    });
     document.querySelector('#anom-sevs button[data-sev="medium"]').click();
     L.sevFilter = !vis(grp("k_high")) && vis(grp("k_med")) && !vis(grp("k_info"));
     document.querySelector('#anom-sevs button[data-sev=""]').click();
